@@ -5,6 +5,7 @@
 services:
   engagement-bot:
     build: .
+    image: farmtown-engagement-bot
     container_name: farmtown-engagement-bot
     restart: unless-stopped
     env_file: .env
