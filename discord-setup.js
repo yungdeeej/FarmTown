@@ -28,6 +28,9 @@ const {
   ChannelType,
   PermissionsBitField,
   EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require('discord.js');
 
 const Flags = PermissionsBitField.Flags;
@@ -38,7 +41,19 @@ const Flags = PermissionsBitField.Flags;
 
 // false -> minimal launch structure only.
 // true  -> also create the remaining full-structure channels/roles.
-const PHASE_2 = false;
+const PHASE_2 = true;
+
+// Branding assets. Paste public image URLs here (e.g. drop the image in any
+// Discord channel and "Copy Link"). Left blank, image features are skipped.
+//   logoUrl   - square logo, used for the server icon + embed thumbnails
+//   bannerUrl - wide banner, used in the welcome + launch announcement embeds
+const ASSETS = {
+  logoUrl: process.env.LOGO_URL || '',
+  bannerUrl: process.env.BANNER_URL || '',
+};
+
+// Re-upload the server icon even if the guild already has one.
+const FORCE_ICON = false;
 
 const REASON = 'FarmTown automated server setup';
 
@@ -48,9 +63,13 @@ const REASON = 'FarmTown automated server setup';
 // ---------------------------------------------------------------------------
 //
 // Each entry is a builder `(ctx) => EmbedBuilder`, where ctx provides:
-//   ctx.m(name)   -> clickable <#channel> mention if it exists, else the name
-//   ctx.icon      -> guild icon URL (or null)
-//   ctx.guildName -> guild name
+//   ctx.m(name)    -> clickable <#channel> mention if it exists, else the name
+//   ctx.role(name) -> clickable <@&role> mention if it exists, else the name
+//   ctx.icon       -> guild icon URL (or null)
+//   ctx.logo       -> branding logo URL (or null)
+//   ctx.banner     -> branding banner URL (or null)
+//   ctx.guildName  -> guild name
+//   ctx.selfRoles  -> array of { name, emoji, desc } self-assignable roles
 //
 // Idempotency uses the embed title, so every title must be unique within the
 // channel it is posted to.
@@ -79,6 +98,7 @@ const EMBEDS = {
   rules: (ctx) =>
     baseEmbed(ctx, COLORS.red)
       .setTitle('📋 Server Rules')
+      .setThumbnail(ctx.logo || null)
       .setDescription(
         `Welcome to **FarmTown** 🌾\nPlease follow these rules to keep the community safe, fun, and scam-free.`,
       )
@@ -101,6 +121,8 @@ const EMBEDS = {
   welcome: (ctx) =>
     baseEmbed(ctx, COLORS.green)
       .setTitle('👋 Welcome to FarmTown')
+      .setThumbnail(ctx.logo || null)
+      .setImage(ctx.banner || null)
       .setDescription(
         'FarmTown is a **browser-native multiplayer farming game** where you grow crops, visit farms, earn Gold, collect Stars, and compete for Farmer’s Pool rewards. 🌾',
       )
@@ -128,6 +150,7 @@ const EMBEDS = {
   officialLinks: (ctx) =>
     baseEmbed(ctx, COLORS.blurple)
       .setTitle('🔗 Official FarmTown Links')
+      .setThumbnail(ctx.logo || null)
       .setDescription(
         'These are the **only** official FarmTown links. Anything posted elsewhere should not be trusted.',
       )
@@ -384,6 +407,46 @@ const EMBEDS = {
           '• There is no secret mint, no private airdrop, and no support wallet',
         ].join('\n'),
       ),
+
+  launchAnnouncement: (ctx) =>
+    baseEmbed(ctx, COLORS.brandGreen)
+      .setTitle('🌾 FarmTown is Live!')
+      .setThumbnail(ctx.logo || null)
+      .setImage(ctx.banner || null)
+      .setDescription(
+        'Start your farm, grow crops, visit friends, and compete for rewards. Welcome to the community! 🚜',
+      )
+      .addFields(
+        { name: '🎮 Play Now', value: 'https://play.YOURDOMAIN.com', inline: true },
+        { name: '🌐 Website', value: 'https://YOURDOMAIN.com', inline: true },
+        {
+          name: '✨ What you can do',
+          value: [
+            '• Grow crops and harvest for Gold',
+            '• Visit friend farms',
+            '• Collect Falling Stars',
+            '• Plant premium Weed',
+            '• Compete in Farmer’s Pool',
+          ].join('\n'),
+        },
+        {
+          name: '🛡️ Stay Safe',
+          value: `Only trust links in ${ctx.m('🔗・official-links')} • Admins will **never** DM you first • Never share your seed phrase.`,
+        },
+      ),
+
+  selfRoles: (ctx) => {
+    const e = baseEmbed(ctx, COLORS.blurple)
+      .setTitle('🎭 Get Your Roles')
+      .setThumbnail(ctx.logo || null)
+      .setDescription(
+        'Click a button below to **toggle** a role on or off. Opt in to the pings and updates you care about.',
+      );
+    for (const r of ctx.selfRoles || []) {
+      e.addFields({ name: `${r.emoji} ${ctx.role(r.name)}`, value: r.desc });
+    }
+    return e;
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -404,9 +467,10 @@ const STRUCTURE = [
   {
     name: '📌 INFORMATION',
     channels: [
-      { name: '📣・announcements', phase: 1, readOnly: true },
+      { name: '📣・announcements', phase: 1, readOnly: true, posts: ['launchAnnouncement'] },
       { name: '📋・rules', phase: 1, readOnly: true, posts: ['rules'] },
       { name: '👋・welcome', phase: 1, readOnly: true, posts: ['welcome'] },
+      { name: '🎭・get-roles', phase: 1, readOnly: true, selfRoles: true },
       { name: '📰・updates', phase: 2, readOnly: true },
       { name: '🐞・bug-fixes', phase: 2, readOnly: true },
       { name: '🔗・official-links', phase: 1, readOnly: true, posts: ['officialLinks', 'safety'] },
@@ -536,7 +600,21 @@ const ROLES = [
   { name: 'OG Farmer', phase: 2, color: 0x8e44ad, hoist: false, permissions: [] },
   { name: 'Weed Farmer', phase: 2, color: 0x16a085, hoist: false, permissions: [] },
   { name: 'Star Collector', phase: 2, color: 0xfdcb6e, hoist: false, permissions: [] },
+  // Self-assignable opt-in ping/interest roles (toggled via #get-roles buttons,
+  // handled by engagement-bot.js). Mentionable so staff can ping opted-in users.
+  { name: 'Announcement Ping', phase: 1, color: 0xe74c3c, hoist: false, mentionable: true, permissions: [], selfAssign: '🔔', desc: 'Get pinged for major announcements' },
+  { name: 'Update Ping', phase: 1, color: 0x3498db, hoist: false, mentionable: true, permissions: [], selfAssign: '🆕', desc: 'Get pinged for game updates & patch notes' },
+  { name: 'Event Ping', phase: 1, color: 0x9b59b6, hoist: false, mentionable: true, permissions: [], selfAssign: '🎉', desc: 'Get pinged for events & community nights' },
+  { name: 'Playtester', phase: 1, color: 0x1abc9c, hoist: false, mentionable: true, permissions: [], selfAssign: '🧪', desc: 'Opt into test builds & playtests' },
+  { name: 'Mobile Tester', phase: 1, color: 0xe67e22, hoist: false, mentionable: true, permissions: [], selfAssign: '📱', desc: 'Help test the mobile experience' },
 ];
+
+// Derived list of self-assignable roles for the #get-roles message.
+const SELF_ROLES = ROLES.filter((r) => r.selfAssign).map((r) => ({
+  name: r.name,
+  emoji: r.selfAssign,
+  desc: r.desc,
+}));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -548,7 +626,7 @@ function log(tag, msg) {
   console.log(`[${tag}] ${msg}`);
 }
 
-const counts = { created: 0, skipped: 0, perms: 0, pinned: 0, pinSkipped: 0, cleaned: 0 };
+const counts = { created: 0, skipped: 0, perms: 0, pinned: 0, updated: 0, pinSkipped: 0, cleaned: 0 };
 
 /**
  * Run a discord.js operation with backoff on rate limits / transient errors.
@@ -680,7 +758,7 @@ async function ensureRoles(guild) {
             name: role.name,
             colors: { primaryColor: role.color },
             hoist: !!role.hoist,
-            mentionable: false,
+            mentionable: !!role.mentionable,
             permissions: new PermissionsBitField(role.permissions || []),
             reason: REASON,
           }),
@@ -806,6 +884,33 @@ function makeMention(guild) {
   };
 }
 
+// Resolve a clickable role mention by role name.
+function makeRoleMention(roleMap) {
+  return (name) => {
+    const r = roleMap.get(name);
+    return r ? `<@&${r.id}>` : `**${name}**`;
+  };
+}
+
+/**
+ * Normalized signature of just the embed fields we control, so we can detect
+ * when a posted embed has drifted from the desired one (Discord adds proxy
+ * URLs and other fields we must ignore).
+ */
+function embedSignature(data) {
+  if (!data) return '';
+  return JSON.stringify({
+    title: data.title || '',
+    description: data.description || '',
+    color: data.color ?? null,
+    author: data.author?.name || '',
+    footer: data.footer?.text || '',
+    image: data.image?.url || '',
+    thumbnail: data.thumbnail?.url || '',
+    fields: (data.fields || []).map((f) => ({ name: f.name, value: f.value, inline: !!f.inline })),
+  });
+}
+
 /**
  * Delete the bot's old plain-text posts in a managed channel (one-time
  * migration to embeds). Only removes messages authored by this bot that carry
@@ -822,56 +927,103 @@ async function cleanupLegacyText(channel, recent, me) {
   }
 }
 
+async function ensurePinned(channel, msg) {
+  const pins = await withRetry(() => channel.messages.fetchPins(), `fetch pins ${channel.name}`);
+  if (!pins.items.some(({ message: m }) => m.id === msg.id)) {
+    await withRetry(() => msg.pin(REASON), `pin in ${channel.name}`);
+  }
+}
+
 /**
- * Post and pin an embed in `channel` unless a bot message with the same embed
- * title is already present (pinned or in recent history). Idempotent. Also
- * migrates away any legacy plain-text posts.
+ * Post/update + pin a bot message identified by its embed title. Converges to
+ * the desired state: posts if missing, edits if the embed (or components) have
+ * drifted, otherwise leaves it. Idempotent and safe to re-run. `components` is
+ * optional (used for the self-roles button row).
  */
-async function postAndPin(channel, embed) {
+async function upsertMessage(channel, embed, components) {
   const me = channel.client.user.id;
   const title = embed.data.title;
-
-  const pinned = await withRetry(() => channel.messages.fetchPins(), `fetch pins ${channel.name}`);
-  const alreadyPinned = pinned.items.some(
-    ({ message: m }) => m.author.id === me && m.embeds[0]?.title === title,
-  );
+  const payload = { embeds: [embed], components: components || [] };
 
   const recent = await withRetry(
     () => channel.messages.fetch({ limit: 50 }),
     `fetch recent ${channel.name}`,
   );
-
-  // One-time migration: drop old plain-text versions of our content.
   await cleanupLegacyText(channel, recent, me);
 
-  if (alreadyPinned) {
-    log('PIN-SKIP', `"${title}" already pinned in #${channel.name}`);
+  const existing = recent.find((m) => m.author.id === me && m.embeds[0]?.title === title);
+
+  if (!existing) {
+    const msg = await withRetry(() => channel.send(payload), `post in ${channel.name}`);
+    await ensurePinned(channel, msg);
+    log('POST', `posted + pinned "${title}" in #${channel.name}`);
+    counts.pinned += 1;
+    await sleep(500);
+    return;
+  }
+
+  const sameEmbed =
+    embedSignature(existing.embeds[0]?.data || existing.embeds[0]?.toJSON?.()) ===
+    embedSignature(embed.data);
+  const existingIds = (existing.components || [])
+    .flatMap((row) => row.components.map((c) => c.customId))
+    .join(',');
+  const desiredIds = (components || [])
+    .flatMap((row) => row.components.map((c) => c.data.custom_id))
+    .join(',');
+
+  if (sameEmbed && existingIds === desiredIds) {
+    await ensurePinned(channel, existing);
+    log('PIN-SKIP', `"${title}" already up to date in #${channel.name}`);
     counts.pinSkipped += 1;
     return;
   }
 
-  // Reuse an identical (but unpinned) embed if we posted one before.
-  let msg = recent.find((m) => m.author.id === me && m.embeds[0]?.title === title);
-  if (!msg) {
-    msg = await withRetry(() => channel.send({ embeds: [embed] }), `post in ${channel.name}`);
-    log('POST', `posted "${title}" in #${channel.name}`);
-  } else {
-    log('POST-SKIP', `"${title}" already present in #${channel.name}`);
-  }
-
-  await withRetry(() => msg.pin(REASON), `pin in ${channel.name}`);
-  log('PIN', `pinned "${title}" in #${channel.name}`);
-  counts.pinned += 1;
+  await withRetry(() => existing.edit(payload), `edit in ${channel.name}`);
+  await ensurePinned(channel, existing);
+  log('UPDATE', `updated "${title}" in #${channel.name}`);
+  counts.updated += 1;
   await sleep(500);
 }
 
-async function postContent(guild, builtChannels) {
+function buildSelfRoleButtons(roleMap) {
+  const rows = [];
+  let row = new ActionRowBuilder();
+  for (const sr of SELF_ROLES) {
+    const role = roleMap.get(sr.name);
+    if (!role) continue;
+    if (row.components.length === 5) {
+      rows.push(row);
+      row = new ActionRowBuilder();
+    }
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`selfrole:${role.id}`)
+        .setLabel(sr.name)
+        .setEmoji(sr.emoji)
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  if (row.components.length) rows.push(row);
+  return rows;
+}
+
+async function postContent(guild, builtChannels, roleMap) {
   const ctx = {
     m: makeMention(guild),
+    role: makeRoleMention(roleMap),
     icon: guild.iconURL ? guild.iconURL({ size: 128 }) : null,
+    logo: ASSETS.logoUrl || null,
+    banner: ASSETS.bannerUrl || null,
     guildName: guild.name,
+    selfRoles: SELF_ROLES,
   };
+
   for (const { channel, meta } of builtChannels) {
+    if (meta.selfRoles) {
+      await upsertMessage(channel, EMBEDS.selfRoles(ctx), buildSelfRoleButtons(roleMap));
+      continue;
+    }
     if (!meta.posts || !meta.posts.length) continue;
     for (const key of meta.posts) {
       const builder = EMBEDS[key];
@@ -879,7 +1031,7 @@ async function postContent(guild, builtChannels) {
         log('WARN', `missing embed "${key}" for ${meta.name}`);
         continue;
       }
-      await postAndPin(channel, builder(ctx));
+      await upsertMessage(channel, builder(ctx));
     }
   }
 }
@@ -907,6 +1059,9 @@ async function main() {
   await withRetry(() => guild.roles.fetch(), 'fetch roles');
   log('INFO', `target guild: ${guild.name} (${guild.id})`);
 
+  // 0) Branding + bot identity.
+  await applyBranding(guild, client);
+
   // 1) Categories  2) Channels  3) Roles  (per spec order)
   const categoryMap = await ensureCategories(guild);
   const builtChannels = await ensureChannels(guild, categoryMap);
@@ -915,31 +1070,78 @@ async function main() {
   // 4) Permission overwrites (needs roles to exist)
   await applyPermissions(guild, categoryMap, builtChannels, roleMap);
 
-  // 5) Canned content (post + pin)
-  await postContent(guild, builtChannels);
+  // Refresh the channel cache so embeds can resolve mentions/icon for new channels.
+  await withRetry(() => guild.channels.fetch(), 'refetch channels');
+
+  // 5) Canned content (post/update + pin), including the self-roles button message.
+  await postContent(guild, builtChannels, roleMap);
 
   // 6) Farmer = default member role.
-  // Discord has no API to auto-assign a role to new joiners; that is configured
-  // via Server Settings -> Onboarding ("Default Channels & Roles") or an
-  // autorole bot. We ensure the Farmer role exists with baseline member
-  // permissions; finish the wiring in the dashboard.
+  // Discord has no native API to auto-assign a role to new joiners. engagement-bot.js
+  // handles that on guildMemberAdd; alternatively set it via Server Settings ->
+  // Onboarding -> Default Channels & Roles.
   const farmer = roleMap.get('Farmer');
   if (farmer) {
     log(
       'INFO',
-      `Farmer role ready (${farmer.id}). Set it as the default member role via ` +
-        'Server Settings -> Onboarding -> Default Channels & Roles (no API exists to auto-assign joiners).',
+      `Farmer role ready (${farmer.id}). Auto-assign on join is handled by engagement-bot.js ` +
+        '(or set it via Server Settings -> Onboarding -> Default Channels & Roles).',
     );
   }
 
   log(
     'DONE',
     `created=${counts.created} skipped=${counts.skipped} permsApplied=${counts.perms} ` +
-      `pinned=${counts.pinned} pinSkipped=${counts.pinSkipped} legacyRemoved=${counts.cleaned}`,
+      `posted=${counts.pinned} updated=${counts.updated} upToDate=${counts.pinSkipped} ` +
+      `legacyRemoved=${counts.cleaned}`,
   );
   log('INFO', 'Carl-bot, Ticket Tool and Wick were left untouched (configure manually).');
 
   await client.destroy();
+}
+
+/**
+ * Set the server icon from the logo, route Discord's native join messages to
+ * #general (engagement), and make sure the bot's updated name shows by clearing
+ * any stale server nickname.
+ */
+async function applyBranding(guild, client) {
+  // Server icon.
+  if (ASSETS.logoUrl && (FORCE_ICON || !guild.icon)) {
+    try {
+      await withRetry(() => guild.setIcon(ASSETS.logoUrl, REASON), 'set server icon');
+      log('BRAND', 'server icon set from logo');
+    } catch (err) {
+      log('WARN', `could not set server icon: ${err.message}`);
+    }
+  } else if (!ASSETS.logoUrl) {
+    log('INFO', 'no LOGO_URL set — skipping server icon (set ASSETS.logoUrl to enable).');
+  }
+
+  // Native join messages in #general for a livelier server.
+  const general = guild.channels.cache.find(
+    (c) => c.type === ChannelType.GuildText && c.name === '💬・general',
+  );
+  if (general && guild.systemChannelId !== general.id) {
+    try {
+      await withRetry(() => guild.setSystemChannel(general.id, REASON), 'set system channel');
+      log('BRAND', 'join messages routed to #💬・general');
+    } catch (err) {
+      log('WARN', `could not set system channel: ${err.message}`);
+    }
+  }
+
+  // Bot identity: ensure the updated username shows by clearing a stale nickname.
+  try {
+    const me = await guild.members.fetchMe();
+    log('INFO', `bot identity: ${client.user.tag} (nickname: ${me.nickname || 'none'})`);
+    if (me.nickname) {
+      await withRetry(() => me.setNickname(null, 'Show updated bot username'), 'clear nickname');
+      log('BRAND', `cleared stale nickname — now showing "${client.user.username}"`);
+    }
+  } catch (err) {
+    log('WARN', `could not adjust bot nickname: ${err.message}`);
+  }
 }
 
 if (require.main === module) {
@@ -949,4 +1151,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { EMBEDS, STRUCTURE, ROLES };
+module.exports = { EMBEDS, STRUCTURE, ROLES, SELF_ROLES };
