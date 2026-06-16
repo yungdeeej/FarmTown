@@ -5,6 +5,7 @@
   "description": "Idempotent discord.js v14 script that builds out the FarmTown launch server.",
   "main": "discord-setup.js",
   "scripts": {
+    "start": "node engagement-bot.js",
     "setup": "node discord-setup.js",
     "bot": "node engagement-bot.js",
     "bot:selftest": "SELFTEST=1 node engagement-bot.js"

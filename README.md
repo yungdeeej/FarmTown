@@ -89,6 +89,34 @@ npm run bot:selftest
 Env vars: `WELCOME_AUTOROLE` (`1` to enable join automation), `FARMER_ROLE`
 (default `Farmer`), `WELCOME_CHANNEL` (default `💬・general`), `SELFTEST`.
 
+### Hosting the bot 24/7
+
+The bot must stay running for the buttons and join automation to work. Pick one:
+
+**Docker / VPS (simplest):**
+
+```bash
+cp .env.example .env   # fill in DISCORD_BOT_TOKEN + GUILD_ID (and WELCOME_AUTOROLE=1 if wanted)
+docker compose up -d   # restarts automatically; `docker compose logs -f` to watch
+```
+
+**Railway:** push the repo, create a project from it. `railway.json` builds the
+`Dockerfile` and runs the bot. Add `DISCORD_BOT_TOKEN`, `GUILD_ID` (and
+optionally `WELCOME_AUTOROLE=1`) as service variables.
+
+**Fly.io:**
+
+```bash
+fly launch --no-deploy            # accept the included fly.toml
+fly secrets set DISCORD_BOT_TOKEN=... GUILD_ID=...
+fly secrets set WELCOME_AUTOROLE=1   # optional (needs Server Members Intent)
+fly deploy
+```
+
+All three run `node engagement-bot.js` (also the `npm start` default) and
+restart on failure. Enable the **Server Members Intent** in the Developer Portal
+before setting `WELCOME_AUTOROLE=1`.
+
 ## Notes
 
 - **Carl-bot / Ticket Tool / Wick are not touched** — configure those manually.

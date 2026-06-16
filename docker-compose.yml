@@ -1,0 +1,11 @@
+# Simplest option for a VPS / home server.
+#   1. cp .env.example .env   and fill in DISCORD_BOT_TOKEN + GUILD_ID
+#   2. docker compose up -d
+# The bot restarts automatically unless you stop it.
+services:
+  engagement-bot:
+    build: .
+    container_name: farmtown-engagement-bot
+    restart: unless-stopped
+    env_file: .env
+    command: ["node", "engagement-bot.js"]

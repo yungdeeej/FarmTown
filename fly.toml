@@ -1,0 +1,22 @@
+# Fly.io config for the FarmTown engagement bot.
+# This is a worker (no inbound HTTP), so there are no [[services]] / ports.
+#
+# Deploy:
+#   fly launch --no-deploy            # creates the app (accept this config)
+#   fly secrets set DISCORD_BOT_TOKEN=... GUILD_ID=...
+#   fly secrets set WELCOME_AUTOROLE=1   # optional (needs Server Members Intent)
+#   fly deploy
+
+app = "farmtown-engagement-bot"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+
+# A single small always-on instance is plenty for a Discord bot.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
