@@ -59,6 +59,11 @@ const ASSETS = {
 // Re-upload the server icon even if the guild already has one (FORCE_ICON=1).
 const FORCE_ICON = process.env.FORCE_ICON === '1';
 
+// How the #get-roles panel works:
+//   'carlbot' - emoji reactions, driven by Carl-bot's Reaction Roles (no hosting)
+//   'bot'     - custom buttons, driven by engagement-bot.js (needs a host)
+const SELF_ROLE_MODE = 'carlbot';
+
 // Official FarmTown links used throughout the embeds. Update here, re-run, and
 // the pinned messages update in place. Leave a value as 'TBD' until known.
 const LINKS = {
@@ -470,12 +475,13 @@ const EMBEDS = {
       ),
 
   selfRoles: (ctx) => {
+    const intro = ctx.reactionMode
+      ? '**React** with an emoji below to get that role — react again to remove it. Opt in to the pings and updates you care about.'
+      : 'Click a button below to **toggle** a role on or off. Opt in to the pings and updates you care about.';
     const e = baseEmbed(ctx, COLORS.blurple)
       .setTitle('🎭 Get Your Roles')
       .setThumbnail(ctx.logo || null)
-      .setDescription(
-        'Click a button below to **toggle** a role on or off. Opt in to the pings and updates you care about.',
-      );
+      .setDescription(intro);
     // NOTE: embed field *names* do not render <@&id> mentions, so use the plain
     // role name in the header and put the (rendered) mention in the value.
     for (const r of ctx.selfRoles || []) {
@@ -1017,7 +1023,7 @@ async function upsertMessage(channel, embed, components, assetFiles) {
     log('POST', `posted + pinned "${title}" in #${channel.name}`);
     counts.pinned += 1;
     await sleep(500);
-    return;
+    return msg;
   }
 
   const sameEmbed =
@@ -1034,7 +1040,7 @@ async function upsertMessage(channel, embed, components, assetFiles) {
     await ensurePinned(channel, existing);
     log('PIN-SKIP', `"${title}" already up to date in #${channel.name}`);
     counts.pinSkipped += 1;
-    return;
+    return existing;
   }
 
   // Replace attachments when editing so re-uploaded files don't duplicate.
@@ -1043,6 +1049,18 @@ async function upsertMessage(channel, embed, components, assetFiles) {
   log('UPDATE', `updated "${title}" in #${channel.name}`);
   counts.updated += 1;
   await sleep(500);
+  return existing;
+}
+
+// Add the given emoji as reactions to a message if not already present
+// (idempotent — lets members react immediately once Carl-bot binds the roles).
+async function ensureReactions(message, emojis) {
+  const present = new Set(message.reactions.cache.map((r) => r.emoji.name));
+  for (const emoji of emojis) {
+    if (present.has(emoji)) continue;
+    await withRetry(() => message.react(emoji), `react ${emoji} in ${message.channel.name}`);
+    await sleep(350);
+  }
 }
 
 function buildSelfRoleButtons(roleMap) {
@@ -1077,6 +1095,7 @@ async function postContent(guild, builtChannels, roleMap) {
     if (a.kind === 'file') assetFiles[a.name] = { attachment: a.path, name: a.name };
   }
 
+  const reactionMode = SELF_ROLE_MODE === 'carlbot';
   const ctx = {
     m: makeMention(guild),
     role: makeRoleMention(roleMap),
@@ -1085,11 +1104,19 @@ async function postContent(guild, builtChannels, roleMap) {
     banner: assetEmbedRef(banner),
     guildName: guild.name,
     selfRoles: SELF_ROLES,
+    reactionMode,
   };
 
   for (const { channel, meta } of builtChannels) {
     if (meta.selfRoles) {
-      await upsertMessage(channel, EMBEDS.selfRoles(ctx), buildSelfRoleButtons(roleMap), assetFiles);
+      // Carl-bot mode: no buttons, pre-add the emoji so reactions are ready to bind.
+      // Bot mode: attach the custom buttons handled by engagement-bot.js.
+      const components = reactionMode ? [] : buildSelfRoleButtons(roleMap);
+      const msg = await upsertMessage(channel, EMBEDS.selfRoles(ctx), components, assetFiles);
+      if (reactionMode && msg) {
+        await ensureReactions(msg, SELF_ROLES.map((r) => r.emoji));
+        log('REACT', `ensured ${SELF_ROLES.length} role reactions on #${channel.name}`);
+      }
       continue;
     }
     if (!meta.posts || !meta.posts.length) continue;

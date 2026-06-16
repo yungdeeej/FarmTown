@@ -61,7 +61,31 @@ one is already set.
 - Sets the server icon, routes native join messages to `#general`, and clears
   any stale bot nickname so the current bot username shows.
 
-## 2. Run the engagement bot (`engagement-bot.js`)
+## 2. Self-roles + auto-role
+
+Two ways to power the `#get-roles` panel and auto-assign the Farmer role on
+join, controlled by `SELF_ROLE_MODE` in `discord-setup.js`:
+
+### Option A — Carl-bot (no hosting; `SELF_ROLE_MODE = 'carlbot'`)
+
+The setup script posts the panel with emoji reactions already added. In the
+[Carl-bot dashboard](https://carl.gg) for your server:
+
+1. **Reaction Roles → Reaction Roles** → "Create with existing message", paste
+   the `#get-roles` message link, and map each emoji to its role
+   (🔔 Announcement Ping, 🆕 Update Ping, 🎉 Event Ping, 🧪 Playtester,
+   📱 Mobile Tester).
+2. **Autorole** → add **Farmer** so every new member gets it automatically.
+3. *(optional)* **Greeting** → enable a welcome message.
+
+No bot to host — Carl-bot is always on.
+
+### Option B — custom bot (`SELF_ROLE_MODE = 'bot'`)
+
+Use the included `engagement-bot.js` instead (button-based roles + auto-role +
+welcome). It must be hosted continuously — see below.
+
+## 3. Run the engagement bot (`engagement-bot.js`)
 
 This is a **persistent** process — run it on any always-on host (a small VPS,
 Railway, Fly.io, your game backend, etc.). It handles what a one-shot script
