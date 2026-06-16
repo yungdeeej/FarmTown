@@ -442,8 +442,10 @@ const EMBEDS = {
       .setDescription(
         'Click a button below to **toggle** a role on or off. Opt in to the pings and updates you care about.',
       );
+    // NOTE: embed field *names* do not render <@&id> mentions, so use the plain
+    // role name in the header and put the (rendered) mention in the value.
     for (const r of ctx.selfRoles || []) {
-      e.addFields({ name: `${r.emoji} ${ctx.role(r.name)}`, value: r.desc });
+      e.addFields({ name: `${r.emoji} ${r.name}`, value: `${ctx.role(r.name)} — ${r.desc}` });
     }
     return e;
   },

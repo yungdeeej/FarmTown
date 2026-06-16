@@ -34,6 +34,7 @@ const {
   Events,
   EmbedBuilder,
   PermissionsBitField,
+  MessageFlags,
 } = require('discord.js');
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -88,7 +89,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const roleId = interaction.customId.slice('selfrole:'.length);
   const role = interaction.guild?.roles.cache.get(roleId);
   if (!role) {
-    return interaction.reply({ content: 'That role no longer exists.', ephemeral: true });
+    return interaction.reply({ content: 'That role no longer exists.', flags: MessageFlags.Ephemeral });
   }
 
   const me = interaction.guild.members.me;
@@ -96,7 +97,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       me.roles.highest.comparePositionTo(role) <= 0) {
     return interaction.reply({
       content: `I can't manage **${role.name}**. Ask an admin to move my role above it.`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 
@@ -104,15 +105,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const member = interaction.member;
     if (member.roles.cache.has(roleId)) {
       await member.roles.remove(roleId, 'Self-role toggle off');
-      await interaction.reply({ content: `Removed **${role.name}**.`, ephemeral: true });
+      await interaction.reply({ content: `Removed **${role.name}**.`, flags: MessageFlags.Ephemeral });
     } else {
       await member.roles.add(roleId, 'Self-role toggle on');
-      await interaction.reply({ content: `Added **${role.name}**! 🎉`, ephemeral: true });
+      await interaction.reply({ content: `Added **${role.name}**! 🎉`, flags: MessageFlags.Ephemeral });
     }
   } catch (err) {
     log('ERROR', `self-role toggle failed: ${err.message}`);
     if (!interaction.replied) {
-      await interaction.reply({ content: 'Something went wrong — try again.', ephemeral: true });
+      await interaction.reply({ content: 'Something went wrong — try again.', flags: MessageFlags.Ephemeral });
     }
   }
 });
