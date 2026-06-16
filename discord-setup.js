@@ -22,6 +22,9 @@
 
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+
 const {
   Client,
   GatewayIntentBits,
@@ -43,19 +46,41 @@ const Flags = PermissionsBitField.Flags;
 // true  -> also create the remaining full-structure channels/roles.
 const PHASE_2 = true;
 
-// Branding assets. Paste public image URLs here (e.g. drop the image in any
-// Discord channel and "Copy Link"). Left blank, image features are skipped.
-//   logoUrl   - square logo, used for the server icon + embed thumbnails
-//   bannerUrl - wide banner, used in the welcome + launch announcement embeds
+// Branding assets. Each may be a local file path (preferred — committed to the
+// repo and attached to messages so it never expires) or a public URL. Left
+// blank, image features are skipped.
+//   logo   - square logo: server icon + embed thumbnails
+//   banner - wide banner: welcome + launch announcement embeds
 const ASSETS = {
-  logoUrl: process.env.LOGO_URL || '',
-  bannerUrl: process.env.BANNER_URL || '',
+  logo: process.env.LOGO_URL || 'assets/logo.png',
+  banner: process.env.BANNER_URL || 'assets/banner.png',
 };
 
-// Re-upload the server icon even if the guild already has one.
-const FORCE_ICON = false;
+// Re-upload the server icon even if the guild already has one (FORCE_ICON=1).
+const FORCE_ICON = process.env.FORCE_ICON === '1';
 
 const REASON = 'FarmTown automated server setup';
+
+/**
+ * Classify a branding asset value into how it should be used:
+ *   { kind: 'file', path, name }  - local file, attached to messages
+ *   { kind: 'url', url }          - remote URL, referenced directly
+ *   { kind: 'none' }
+ */
+function resolveAsset(value) {
+  if (!value) return { kind: 'none' };
+  if (/^https?:\/\//i.test(value)) return { kind: 'url', url: value };
+  const abs = path.resolve(__dirname, value);
+  if (fs.existsSync(abs)) return { kind: 'file', path: abs, name: path.basename(abs) };
+  return { kind: 'none' };
+}
+
+// Embed image reference for an asset (attachment:// for files, the URL otherwise).
+function assetEmbedRef(resolved) {
+  if (resolved.kind === 'file') return `attachment://${resolved.name}`;
+  if (resolved.kind === 'url') return resolved.url;
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Canned content (from the spec) rendered as rich embeds.
@@ -901,16 +926,37 @@ function makeRoleMention(roleMap) {
  */
 function embedSignature(data) {
   if (!data) return '';
+  // Compare images by filename only: a desired "attachment://logo.png" must
+  // match the resolved CDN URL ".../logo.png" Discord stores after upload.
+  const imgKey = (url) => {
+    if (!url) return '';
+    if (url.startsWith('attachment://')) return url.slice('attachment://'.length);
+    try {
+      return path.basename(new URL(url).pathname);
+    } catch {
+      return url;
+    }
+  };
   return JSON.stringify({
     title: data.title || '',
     description: data.description || '',
     color: data.color ?? null,
     author: data.author?.name || '',
     footer: data.footer?.text || '',
-    image: data.image?.url || '',
-    thumbnail: data.thumbnail?.url || '',
+    image: imgKey(data.image?.url),
+    thumbnail: imgKey(data.thumbnail?.url),
     fields: (data.fields || []).map((f) => ({ name: f.name, value: f.value, inline: !!f.inline })),
   });
+}
+
+// Collect the local files an embed references via attachment:// so they can be
+// uploaded with the message.
+function collectAttachmentFiles(embedData, assetFiles) {
+  const refs = new Set();
+  for (const url of [embedData.image?.url, embedData.thumbnail?.url]) {
+    if (url && url.startsWith('attachment://')) refs.add(url.slice('attachment://'.length));
+  }
+  return [...refs].map((name) => assetFiles[name]).filter(Boolean);
 }
 
 /**
@@ -942,10 +988,11 @@ async function ensurePinned(channel, msg) {
  * drifted, otherwise leaves it. Idempotent and safe to re-run. `components` is
  * optional (used for the self-roles button row).
  */
-async function upsertMessage(channel, embed, components) {
+async function upsertMessage(channel, embed, components, assetFiles) {
   const me = channel.client.user.id;
   const title = embed.data.title;
-  const payload = { embeds: [embed], components: components || [] };
+  const files = collectAttachmentFiles(embed.data, assetFiles || {});
+  const payload = { embeds: [embed], components: components || [], files };
 
   const recent = await withRetry(
     () => channel.messages.fetch({ limit: 50 }),
@@ -981,7 +1028,8 @@ async function upsertMessage(channel, embed, components) {
     return;
   }
 
-  await withRetry(() => existing.edit(payload), `edit in ${channel.name}`);
+  // Replace attachments when editing so re-uploaded files don't duplicate.
+  await withRetry(() => existing.edit({ ...payload, attachments: [] }), `edit in ${channel.name}`);
   await ensurePinned(channel, existing);
   log('UPDATE', `updated "${title}" in #${channel.name}`);
   counts.updated += 1;
@@ -1011,19 +1059,28 @@ function buildSelfRoleButtons(roleMap) {
 }
 
 async function postContent(guild, builtChannels, roleMap) {
+  const logo = resolveAsset(ASSETS.logo);
+  const banner = resolveAsset(ASSETS.banner);
+
+  // Local files to attach, keyed by attachment filename.
+  const assetFiles = {};
+  for (const a of [logo, banner]) {
+    if (a.kind === 'file') assetFiles[a.name] = { attachment: a.path, name: a.name };
+  }
+
   const ctx = {
     m: makeMention(guild),
     role: makeRoleMention(roleMap),
     icon: guild.iconURL ? guild.iconURL({ size: 128 }) : null,
-    logo: ASSETS.logoUrl || null,
-    banner: ASSETS.bannerUrl || null,
+    logo: assetEmbedRef(logo),
+    banner: assetEmbedRef(banner),
     guildName: guild.name,
     selfRoles: SELF_ROLES,
   };
 
   for (const { channel, meta } of builtChannels) {
     if (meta.selfRoles) {
-      await upsertMessage(channel, EMBEDS.selfRoles(ctx), buildSelfRoleButtons(roleMap));
+      await upsertMessage(channel, EMBEDS.selfRoles(ctx), buildSelfRoleButtons(roleMap), assetFiles);
       continue;
     }
     if (!meta.posts || !meta.posts.length) continue;
@@ -1033,7 +1090,7 @@ async function postContent(guild, builtChannels, roleMap) {
         log('WARN', `missing embed "${key}" for ${meta.name}`);
         continue;
       }
-      await upsertMessage(channel, builder(ctx));
+      await upsertMessage(channel, builder(ctx), undefined, assetFiles);
     }
   }
 }
@@ -1108,16 +1165,20 @@ async function main() {
  * any stale server nickname.
  */
 async function applyBranding(guild, client) {
-  // Server icon.
-  if (ASSETS.logoUrl && (FORCE_ICON || !guild.icon)) {
+  // Server icon (accepts a local path or URL).
+  const logo = resolveAsset(ASSETS.logo);
+  if (logo.kind !== 'none' && (FORCE_ICON || !guild.icon)) {
     try {
-      await withRetry(() => guild.setIcon(ASSETS.logoUrl, REASON), 'set server icon');
+      await withRetry(
+        () => guild.setIcon(logo.kind === 'file' ? logo.path : logo.url, REASON),
+        'set server icon',
+      );
       log('BRAND', 'server icon set from logo');
     } catch (err) {
       log('WARN', `could not set server icon: ${err.message}`);
     }
-  } else if (!ASSETS.logoUrl) {
-    log('INFO', 'no LOGO_URL set — skipping server icon (set ASSETS.logoUrl to enable).');
+  } else if (logo.kind === 'none') {
+    log('INFO', 'no logo asset found — skipping server icon (set ASSETS.logo to enable).');
   }
 
   // Native join messages in #general for a livelier server.
