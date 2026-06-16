@@ -27,6 +27,7 @@ const {
   GatewayIntentBits,
   ChannelType,
   PermissionsBitField,
+  EmbedBuilder,
 } = require('discord.js');
 
 const Flags = PermissionsBitField.Flags;
@@ -42,256 +43,348 @@ const PHASE_2 = false;
 const REASON = 'FarmTown automated server setup';
 
 // ---------------------------------------------------------------------------
-// Canned content (from the spec). TBD placeholders left for URLs / contract.
+// Canned content (from the spec) rendered as rich embeds.
+// TBD placeholders left for URLs / contract address.
 // ---------------------------------------------------------------------------
-
-const CONTENT = {
-  rules: `Welcome to FarmTown.
-
-Rules:
-
-1. Be respectful.
-2. No scams, fake links, fake airdrops, or impersonation.
-3. Admins and moderators will never DM you first.
-4. Never share your seed phrase or private keys.
-5. Only trust links posted in 🔗・official-links.
-6. No spam, raids, hate speech, or harassment.
-7. No financial advice.
-8. Keep bug reports and support requests in the correct channels.
-9. Do not post wallet-draining links or suspicious downloads.
-10. Breaking these rules can result in a timeout or ban.`,
-
-  welcome: `Welcome to FarmTown 🌾
-
-FarmTown is a browser-native multiplayer farming game where players grow crops, visit farms, earn Gold, collect Stars, and compete for Farmer's Pool rewards.
-
-Start here:
-
-1. Read 📋・rules
-2. Check 🔗・official-links
-3. Learn the basics in 🎮・how-to-play
-4. Join the game and start your farm
-5. Share your farm in 🤝・friend-farms
-
-Important:
-Only trust links in 🔗・official-links.
-Admins will never DM you first.
-Never share your seed phrase.`,
-
-  officialLinks: `Official FarmTown Links
-
-Game:
-https://play.YOURDOMAIN.com
-
-Website:
-https://YOURDOMAIN.com
-
-Twitter/X:
-TBD
-
-Token Contract Address:
-TBD
-
-Realtime Backend:
-Not needed for users.
-
-Warning:
-Only trust links in this channel.
-Admins will never DM you first.
-Never enter your seed phrase anywhere.`,
-
-  howToPlay: `How To Play FarmTown
-
-1. Connect Phantom
-2. Sign in with your wallet
-3. Start your farm
-4. Open the Farm Menu
-5. Buy seeds from Store
-6. Open Pouch and select a seed
-7. Use Hoe to prepare soil
-8. Plant crops
-9. Wait for crops to grow
-10. Harvest crops for Gold and XP
-11. Use Gold to expand your farm
-12. Visit friend farms
-13. Collect Falling Stars when they appear
-14. Use Stars for premium gameplay
-15. Sacrifice resources in Farmer's Pool to compete for rewards
-
-Reminder:
-FarmTown is in active development. Report bugs in 🐛・bug-reports.`,
-
-  friendFarms: `Share your farm here.
-
-Format:
-
-Farm name:
-Farm link:
-What you want feedback on:
-
-Example:
-Farm name: Samosa Ranch
-Farm link: https://play.YOURDOMAIN.com/?farm=your-farm-slug
-Feedback: Tell me if my farm layout looks good.`,
-
-  suggestions: `When suggesting a feature, please include:
-
-1. What should be added?
-2. Why would it make FarmTown better?
-3. Is it gameplay, UI, economy, or social?
-4. Is it urgent or future polish?`,
-
-  bugReport: `Bug Report
-
-What happened:
-
-What did you expect:
-
-Device/browser:
-
-Wallet:
-
-Screenshot/video:
-
-Steps to reproduce:
-1.
-2.
-3.`,
-
-  knownIssues: `Known Issues
-
-- Mobile UI polish is still ongoing.
-- Some UI text may be cramped on small screens.
-- If a farm does not load, refresh once and report it in 🐛・bug-reports.`,
-
-  testBuild: `Current FarmTown Test Build
-
-Game:
-https://play.YOURDOMAIN.com
-
-Please test:
-
-1. Wallet login
-2. Starting your farm
-3. Buying seeds
-4. Planting and harvesting
-5. Visiting friend farms
-6. Falling Stars
-7. Stars store
-8. Weed
-9. Farmer's Pool
-10. Mobile layout
-
-Report bugs in 🐛・bug-reports.`,
-
-  mobileFeedback: `Mobile Feedback
-
-Device:
-Browser:
-Screenshot:
-What felt hard to use:
-What should be bigger/smaller:`,
-
-  stars: `Stars are FarmTown's premium in-game currency.
-
-Stars can be used for:
-
-- Crop boosts
-- Premium gameplay
-- Weed seeds
-- Future cosmetics/items
-
-Stars are bought with the FarmTown token.
-There are no token payouts from Stars.
-There is no Stars-to-token withdrawal.`,
-
-  weed: `Weed is FarmTown's premium crop.
-
-Current design:
-
-- Bought with Stars
-- 30 Stars per Weed seed
-- 5 hour grow time
-- High Gold output
-- Premium crop risk/reward`,
-
-  farmersPool: `Farmer's Pool lets players sacrifice farm progress to compete for a share of the reward pool.
-
-Players can sacrifice:
-
-- Gold
-- Farm Points
-- Levels
-
-The more you sacrifice compared to everyone else, the larger your share of the pool.
-
-Reward payouts are handled by the game backend.`,
-
-  tokenWarning: `Token discussion is allowed here, but:
-
-- No financial advice
-- No fake links
-- No fake contract addresses
-- No impersonation
-- Only trust the CA in 🔗・official-links`,
-
-  scamAlerts: `Scam Alert Rules
-
-Post here if you see:
-
-- Fake FarmTown links
-- Fake token contracts
-- Fake support DMs
-- Fake airdrops
-- Wallet-draining links
-- Impersonators
-
-Do not click suspicious links.
-Only trust 🔗・official-links.`,
-
-  faq: `FAQ
-
-Q: Do I need Phantom?
-A: Yes. FarmTown uses wallet auth.
-
-Q: Can I play without a wallet?
-A: No, wallet auth is required for gameplay.
-
-Q: Where is the real game link?
-A: Check 🔗・official-links.
-
-Q: Where is the real token CA?
-A: Check 🔗・official-links.
-
-Q: Can I withdraw Stars for tokens?
-A: No. Stars are in-game premium currency only.
-
-Q: Can I withdraw Gold for tokens?
-A: No. There is no Gold-to-token withdrawal.
-
-Q: How do I buy Stars?
-A: Open the Stars panel in game and follow the Phantom payment flow.
-
-Q: What is Weed?
-A: Weed is a premium crop bought with Stars.
-
-Q: What is Farmer's Pool?
-A: A competitive reward pool where players sacrifice resources for a share of the pool.
-
-Q: I found a bug. Where do I report it?
-A: Use 🐛・bug-reports.`,
-
-  safety: `Safety Reminder
-
-Only trust links posted in 🔗・official-links.
-Admins and moderators will never DM you first.
-Never share your seed phrase.
-Never connect your wallet to links sent in DMs.
-There is no secret mint, no private airdrop, and no support wallet.`,
+//
+// Each entry is a builder `(ctx) => EmbedBuilder`, where ctx provides:
+//   ctx.m(name)   -> clickable <#channel> mention if it exists, else the name
+//   ctx.icon      -> guild icon URL (or null)
+//   ctx.guildName -> guild name
+//
+// Idempotency uses the embed title, so every title must be unique within the
+// channel it is posted to.
+
+const COLORS = {
+  green: 0x57f287,
+  brandGreen: 0x3ba55d,
+  blurple: 0x5865f2,
+  blue: 0x3498db,
+  gold: 0xfee75c,
+  amber: 0xf1c40f,
+  orange: 0xe67e22,
+  red: 0xed4245,
+  teal: 0x16a085,
 };
 
-// Trim everything once so equality checks against re-fetched messages are stable.
-for (const k of Object.keys(CONTENT)) CONTENT[k] = CONTENT[k].trim();
+const FOOTER = 'FarmTown 🌾';
+
+function baseEmbed(ctx, color) {
+  const e = new EmbedBuilder().setColor(color).setFooter({ text: FOOTER });
+  if (ctx.icon) e.setAuthor({ name: ctx.guildName || 'FarmTown', iconURL: ctx.icon });
+  return e;
+}
+
+const EMBEDS = {
+  rules: (ctx) =>
+    baseEmbed(ctx, COLORS.red)
+      .setTitle('📋 Server Rules')
+      .setDescription(
+        `Welcome to **FarmTown** 🌾\nPlease follow these rules to keep the community safe, fun, and scam-free.`,
+      )
+      .addFields({
+        name: '​',
+        value: [
+          '**1.** Be respectful.',
+          '**2.** No scams, fake links, fake airdrops, or impersonation.',
+          '**3.** Admins and moderators will **never** DM you first.',
+          '**4.** Never share your seed phrase or private keys.',
+          `**5.** Only trust links posted in ${ctx.m('🔗・official-links')}.`,
+          '**6.** No spam, raids, hate speech, or harassment.',
+          '**7.** No financial advice.',
+          '**8.** Keep bug reports and support requests in the correct channels.',
+          '**9.** Do not post wallet-draining links or suspicious downloads.',
+          '**10.** Breaking these rules can result in a timeout or ban.',
+        ].join('\n'),
+      }),
+
+  welcome: (ctx) =>
+    baseEmbed(ctx, COLORS.green)
+      .setTitle('👋 Welcome to FarmTown')
+      .setDescription(
+        'FarmTown is a **browser-native multiplayer farming game** where you grow crops, visit farms, earn Gold, collect Stars, and compete for Farmer’s Pool rewards. 🌾',
+      )
+      .addFields(
+        {
+          name: '🚀 Start Here',
+          value: [
+            `**1.** Read ${ctx.m('📋・rules')}`,
+            `**2.** Check ${ctx.m('🔗・official-links')}`,
+            `**3.** Learn the basics in ${ctx.m('🎮・how-to-play')}`,
+            '**4.** Join the game and start your farm',
+            `**5.** Share your farm in ${ctx.m('🤝・friend-farms')}`,
+          ].join('\n'),
+        },
+        {
+          name: '🛡️ Stay Safe',
+          value: [
+            `• Only trust links in ${ctx.m('🔗・official-links')}`,
+            '• Admins will **never** DM you first',
+            '• **Never** share your seed phrase',
+          ].join('\n'),
+        },
+      ),
+
+  officialLinks: (ctx) =>
+    baseEmbed(ctx, COLORS.blurple)
+      .setTitle('🔗 Official FarmTown Links')
+      .setDescription(
+        'These are the **only** official FarmTown links. Anything posted elsewhere should not be trusted.',
+      )
+      .addFields(
+        { name: '🎮 Game', value: 'https://play.YOURDOMAIN.com', inline: true },
+        { name: '🌐 Website', value: 'https://YOURDOMAIN.com', inline: true },
+        { name: '​', value: '​', inline: true },
+        { name: '🐦 Twitter / X', value: '`TBD`', inline: true },
+        { name: '📜 Token Contract', value: '`TBD`', inline: true },
+        { name: '​', value: '​', inline: true },
+        {
+          name: '⚠️ Warning',
+          value:
+            'Only trust links in this channel.\nAdmins will **never** DM you first.\nNever enter your seed phrase anywhere.',
+        },
+      ),
+
+  howToPlay: (ctx) =>
+    baseEmbed(ctx, COLORS.blue)
+      .setTitle('🎮 How to Play FarmTown')
+      .setDescription('A quick start guide to your first harvest.')
+      .addFields(
+        {
+          name: '🌱 Getting Started',
+          value: [
+            '**1.** Connect Phantom',
+            '**2.** Sign in with your wallet',
+            '**3.** Start your farm',
+            '**4.** Open the Farm Menu',
+            '**5.** Buy seeds from the Store',
+          ].join('\n'),
+          inline: true,
+        },
+        {
+          name: '🚜 Farming Loop',
+          value: [
+            '**6.** Open Pouch and select a seed',
+            '**7.** Use the Hoe to prepare soil',
+            '**8.** Plant crops',
+            '**9.** Wait for crops to grow',
+            '**10.** Harvest for Gold and XP',
+          ].join('\n'),
+          inline: true,
+        },
+        {
+          name: '⭐ Going Further',
+          value: [
+            '**11.** Use Gold to expand your farm',
+            '**12.** Visit friend farms',
+            '**13.** Collect Falling Stars',
+            '**14.** Use Stars for premium gameplay',
+            '**15.** Compete in Farmer’s Pool',
+          ].join('\n'),
+          inline: true,
+        },
+        {
+          name: '​',
+          value: `FarmTown is in active development — report bugs in ${ctx.m('🐛・bug-reports')}.`,
+        },
+      ),
+
+  friendFarms: (ctx) =>
+    baseEmbed(ctx, COLORS.green)
+      .setTitle('🤝 Share Your Farm')
+      .setDescription('Post your farm so others can visit and give feedback!')
+      .addFields(
+        {
+          name: '📋 Format',
+          value: '```\nFarm name:\nFarm link:\nWhat you want feedback on:\n```',
+        },
+        {
+          name: '✨ Example',
+          value:
+            '```\nFarm name: Samosa Ranch\nFarm link: https://play.YOURDOMAIN.com/?farm=your-farm-slug\nFeedback: Tell me if my farm layout looks good.\n```',
+        },
+      ),
+
+  suggestions: (ctx) =>
+    baseEmbed(ctx, COLORS.gold)
+      .setTitle('💡 Suggesting a Feature')
+      .setDescription('Have an idea to make FarmTown better? Please include:')
+      .addFields(
+        { name: '1️⃣ What should be added?', value: 'Describe the feature.' },
+        { name: '2️⃣ Why would it make FarmTown better?', value: 'The problem it solves.' },
+        { name: '3️⃣ Category', value: 'Gameplay, UI, economy, or social?' },
+        { name: '4️⃣ Priority', value: 'Is it urgent or future polish?' },
+      ),
+
+  bugReport: (ctx) =>
+    baseEmbed(ctx, COLORS.orange)
+      .setTitle('🐛 Bug Report Format')
+      .setDescription('Found a bug? Copy this template and fill it out:')
+      .addFields({
+        name: '📋 Template',
+        value:
+          '```\nWhat happened:\n\nWhat did you expect:\n\nDevice/browser:\n\nWallet:\n\nScreenshot/video:\n\nSteps to reproduce:\n1.\n2.\n3.\n```',
+      })
+      .setFooter({
+        text: 'Never post your seed phrase or private keys • For wallet/payment issues, open a ticket',
+      }),
+
+  knownIssues: (ctx) =>
+    baseEmbed(ctx, COLORS.amber)
+      .setTitle('🟢 Known Issues')
+      .setDescription(
+        [
+          '• Mobile UI polish is still ongoing.',
+          '• Some UI text may be cramped on small screens.',
+          `• If a farm does not load, refresh once and report it in ${ctx.m('🐛・bug-reports')}.`,
+        ].join('\n'),
+      ),
+
+  testBuild: (ctx) =>
+    baseEmbed(ctx, COLORS.blue)
+      .setTitle('🧪 Current Test Build')
+      .addFields(
+        { name: '🎮 Game', value: 'https://play.YOURDOMAIN.com' },
+        {
+          name: '✅ Please test',
+          value: [
+            '**1.** Wallet login',
+            '**2.** Starting your farm',
+            '**3.** Buying seeds',
+            '**4.** Planting and harvesting',
+            '**5.** Visiting friend farms',
+          ].join('\n'),
+          inline: true,
+        },
+        {
+          name: '​',
+          value: [
+            '**6.** Falling Stars',
+            '**7.** Stars store',
+            '**8.** Weed',
+            '**9.** Farmer’s Pool',
+            '**10.** Mobile layout',
+          ].join('\n'),
+          inline: true,
+        },
+        { name: '​', value: `Report bugs in ${ctx.m('🐛・bug-reports')}.` },
+      ),
+
+  mobileFeedback: (ctx) =>
+    baseEmbed(ctx, COLORS.teal)
+      .setTitle('📱 Mobile Feedback')
+      .setDescription('Help us polish the mobile experience.')
+      .addFields({
+        name: '📋 Template',
+        value:
+          '```\nDevice:\nBrowser:\nScreenshot:\nWhat felt hard to use:\nWhat should be bigger/smaller:\n```',
+      }),
+
+  stars: (ctx) =>
+    baseEmbed(ctx, COLORS.gold)
+      .setTitle('⭐ Stars — Premium Currency')
+      .setDescription("Stars are FarmTown's premium in-game currency.")
+      .addFields(
+        {
+          name: '✨ Used for',
+          value: '• Crop boosts\n• Premium gameplay\n• Weed seeds\n• Future cosmetics / items',
+        },
+        {
+          name: '⚠️ Important',
+          value:
+            'Stars are bought with the FarmTown token.\nThere are **no** token payouts from Stars.\nThere is **no** Stars-to-token withdrawal.',
+        },
+      ),
+
+  weed: (ctx) =>
+    baseEmbed(ctx, COLORS.teal)
+      .setTitle('🌿 Weed — Premium Crop')
+      .setDescription("Weed is FarmTown's premium crop.")
+      .addFields(
+        { name: '💰 Cost', value: '30 Stars per Weed seed', inline: true },
+        { name: '⏱️ Grow time', value: '5 hours', inline: true },
+        { name: '📈 Output', value: 'High Gold output', inline: true },
+        { name: '🎲 Profile', value: 'Bought with Stars — premium crop risk/reward.' },
+      ),
+
+  farmersPool: (ctx) =>
+    baseEmbed(ctx, COLORS.amber)
+      .setTitle("🏆 Farmer's Pool")
+      .setDescription(
+        'Sacrifice farm progress to compete for a share of the reward pool. The more you sacrifice compared to everyone else, the larger your share.',
+      )
+      .addFields(
+        { name: '🔥 You can sacrifice', value: '• Gold\n• Farm Points\n• Levels' },
+        { name: '💸 Payouts', value: 'Reward payouts are handled by the game backend.' },
+      ),
+
+  tokenWarning: (ctx) =>
+    baseEmbed(ctx, COLORS.red)
+      .setTitle('📊 Token Chat Rules')
+      .setDescription('Token discussion is allowed here, but:')
+      .addFields({
+        name: '​',
+        value: [
+          '• No financial advice',
+          '• No fake links',
+          '• No fake contract addresses',
+          '• No impersonation',
+          `• Only trust the CA in ${ctx.m('🔗・official-links')}`,
+        ].join('\n'),
+      }),
+
+  scamAlerts: (ctx) =>
+    baseEmbed(ctx, COLORS.red)
+      .setTitle('⚠️ Scam Alert Rules')
+      .setDescription('Report here if you see:')
+      .addFields({
+        name: '​',
+        value: [
+          '• Fake FarmTown links',
+          '• Fake token contracts',
+          '• Fake support DMs',
+          '• Fake airdrops',
+          '• Wallet-draining links',
+          '• Impersonators',
+        ].join('\n'),
+      })
+      .setFooter({ text: 'Do not click suspicious links • Only trust official-links' }),
+
+  faq: (ctx) =>
+    baseEmbed(ctx, COLORS.blurple)
+      .setTitle('❓ Frequently Asked Questions')
+      .addFields(
+        { name: 'Do I need Phantom?', value: 'Yes. FarmTown uses wallet auth.' },
+        { name: 'Can I play without a wallet?', value: 'No, wallet auth is required for gameplay.' },
+        { name: 'Where is the real game link?', value: `Check ${ctx.m('🔗・official-links')}.` },
+        { name: 'Where is the real token CA?', value: `Check ${ctx.m('🔗・official-links')}.` },
+        { name: 'Can I withdraw Stars for tokens?', value: 'No. Stars are in-game premium currency only.' },
+        { name: 'Can I withdraw Gold for tokens?', value: 'No. There is no Gold-to-token withdrawal.' },
+        {
+          name: 'How do I buy Stars?',
+          value: 'Open the Stars panel in game and follow the Phantom payment flow.',
+        },
+        { name: 'What is Weed?', value: 'Weed is a premium crop bought with Stars.' },
+        {
+          name: "What is Farmer's Pool?",
+          value: 'A competitive reward pool where players sacrifice resources for a share of the pool.',
+        },
+        { name: 'I found a bug. Where do I report it?', value: `Use ${ctx.m('🐛・bug-reports')}.` },
+      ),
+
+  safety: (ctx) =>
+    baseEmbed(ctx, COLORS.red)
+      .setTitle('🛡️ Safety Reminder')
+      .setDescription(
+        [
+          `• Only trust links posted in ${ctx.m('🔗・official-links')}`,
+          '• Admins and moderators will **never** DM you first',
+          '• Never share your seed phrase',
+          '• Never connect your wallet to links sent in DMs',
+          '• There is no secret mint, no private airdrop, and no support wallet',
+        ].join('\n'),
+      ),
+};
 
 // ---------------------------------------------------------------------------
 // Structure definition (full spec order; `phase` controls minimal vs full)
@@ -299,7 +392,7 @@ for (const k of Object.keys(CONTENT)) CONTENT[k] = CONTENT[k].trim();
 //
 // Per channel flags:
 //   readOnly : @everyone may view + read history but not send
-//   posts    : array of CONTENT keys to post & pin (in order)
+//   posts    : array of EMBEDS keys to post & pin (in order)
 //
 // The TEAM ONLY category is marked teamOnly: hidden from @everyone, visible
 // to the staff roles. Its child channels inherit that via per-channel
@@ -455,7 +548,7 @@ function log(tag, msg) {
   console.log(`[${tag}] ${msg}`);
 }
 
-const counts = { created: 0, skipped: 0, perms: 0, pinned: 0, pinSkipped: 0 };
+const counts = { created: 0, skipped: 0, perms: 0, pinned: 0, pinSkipped: 0, cleaned: 0 };
 
 /**
  * Run a discord.js operation with backoff on rate limits / transient errors.
@@ -702,53 +795,91 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
   }
 }
 
+// Resolve a clickable channel mention from a spec name (e.g. "🔗・official-links").
+function makeMention(guild) {
+  return (name) => {
+    const target = name.toLowerCase();
+    const c = guild.channels.cache.find(
+      (ch) => ch.type === ChannelType.GuildText && ch.name === target,
+    );
+    return c ? `<#${c.id}>` : `\`${name}\``;
+  };
+}
+
 /**
- * Post and pin `content` in `channel` unless an identical message from this
- * bot is already present (pinned or in recent history). Idempotent.
+ * Delete the bot's old plain-text posts in a managed channel (one-time
+ * migration to embeds). Only removes messages authored by this bot that carry
+ * no embed — those can only be our earlier text posts.
  */
-async function postAndPin(channel, content) {
+async function cleanupLegacyText(channel, recent, me) {
+  for (const m of recent.values()) {
+    if (m.author.id === me && m.embeds.length === 0 && m.content.trim().length) {
+      await withRetry(() => m.delete(), `delete legacy text in ${channel.name}`);
+      log('CLEANUP', `removed old plain-text post in #${channel.name}`);
+      counts.cleaned += 1;
+      await sleep(250);
+    }
+  }
+}
+
+/**
+ * Post and pin an embed in `channel` unless a bot message with the same embed
+ * title is already present (pinned or in recent history). Idempotent. Also
+ * migrates away any legacy plain-text posts.
+ */
+async function postAndPin(channel, embed) {
   const me = channel.client.user.id;
+  const title = embed.data.title;
 
   const pinned = await withRetry(() => channel.messages.fetchPins(), `fetch pins ${channel.name}`);
   const alreadyPinned = pinned.items.some(
-    ({ message: m }) => m.author.id === me && m.content.trim() === content,
+    ({ message: m }) => m.author.id === me && m.embeds[0]?.title === title,
   );
-  if (alreadyPinned) {
-    log('PIN-SKIP', `already pinned in #${channel.name}`);
-    counts.pinSkipped += 1;
-    return;
-  }
 
-  // Reuse an existing identical (but unpinned) message if we posted one before.
   const recent = await withRetry(
     () => channel.messages.fetch({ limit: 50 }),
     `fetch recent ${channel.name}`,
   );
-  let msg = recent.find((m) => m.author.id === me && m.content.trim() === content);
 
+  // One-time migration: drop old plain-text versions of our content.
+  await cleanupLegacyText(channel, recent, me);
+
+  if (alreadyPinned) {
+    log('PIN-SKIP', `"${title}" already pinned in #${channel.name}`);
+    counts.pinSkipped += 1;
+    return;
+  }
+
+  // Reuse an identical (but unpinned) embed if we posted one before.
+  let msg = recent.find((m) => m.author.id === me && m.embeds[0]?.title === title);
   if (!msg) {
-    msg = await withRetry(() => channel.send(content), `post in ${channel.name}`);
-    log('POST', `posted in #${channel.name}`);
+    msg = await withRetry(() => channel.send({ embeds: [embed] }), `post in ${channel.name}`);
+    log('POST', `posted "${title}" in #${channel.name}`);
   } else {
-    log('POST-SKIP', `message already present in #${channel.name}`);
+    log('POST-SKIP', `"${title}" already present in #${channel.name}`);
   }
 
   await withRetry(() => msg.pin(REASON), `pin in ${channel.name}`);
-  log('PIN', `pinned in #${channel.name}`);
+  log('PIN', `pinned "${title}" in #${channel.name}`);
   counts.pinned += 1;
   await sleep(500);
 }
 
-async function postContent(builtChannels) {
+async function postContent(guild, builtChannels) {
+  const ctx = {
+    m: makeMention(guild),
+    icon: guild.iconURL ? guild.iconURL({ size: 128 }) : null,
+    guildName: guild.name,
+  };
   for (const { channel, meta } of builtChannels) {
     if (!meta.posts || !meta.posts.length) continue;
     for (const key of meta.posts) {
-      const content = CONTENT[key];
-      if (!content) {
-        log('WARN', `missing content key "${key}" for ${meta.name}`);
+      const builder = EMBEDS[key];
+      if (!builder) {
+        log('WARN', `missing embed "${key}" for ${meta.name}`);
         continue;
       }
-      await postAndPin(channel, content);
+      await postAndPin(channel, builder(ctx));
     }
   }
 }
@@ -785,7 +916,7 @@ async function main() {
   await applyPermissions(guild, categoryMap, builtChannels, roleMap);
 
   // 5) Canned content (post + pin)
-  await postContent(builtChannels);
+  await postContent(guild, builtChannels);
 
   // 6) Farmer = default member role.
   // Discord has no API to auto-assign a role to new joiners; that is configured
@@ -804,14 +935,18 @@ async function main() {
   log(
     'DONE',
     `created=${counts.created} skipped=${counts.skipped} permsApplied=${counts.perms} ` +
-      `pinned=${counts.pinned} pinSkipped=${counts.pinSkipped}`,
+      `pinned=${counts.pinned} pinSkipped=${counts.pinSkipped} legacyRemoved=${counts.cleaned}`,
   );
   log('INFO', 'Carl-bot, Ticket Tool and Wick were left untouched (configure manually).');
 
   await client.destroy();
 }
 
-main().catch((err) => {
-  console.error('[FATAL]', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('[FATAL]', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { EMBEDS, STRUCTURE, ROLES };
