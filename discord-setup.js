@@ -59,6 +59,15 @@ const ASSETS = {
 // Re-upload the server icon even if the guild already has one (FORCE_ICON=1).
 const FORCE_ICON = process.env.FORCE_ICON === '1';
 
+// Official FarmTown links used throughout the embeds. Update here, re-run, and
+// the pinned messages update in place. Leave a value as 'TBD' until known.
+const LINKS = {
+  game: 'https://play.farmtown.online',
+  website: 'https://farmtown.online',
+  twitter: 'https://x.com/playfarmtown',
+  contract: 'TBD',
+};
+
 const REASON = 'FarmTown automated server setup';
 
 /**
@@ -180,11 +189,11 @@ const EMBEDS = {
         'These are the **only** official FarmTown links. Anything posted elsewhere should not be trusted.',
       )
       .addFields(
-        { name: '🎮 Game', value: 'https://play.YOURDOMAIN.com', inline: true },
-        { name: '🌐 Website', value: 'https://YOURDOMAIN.com', inline: true },
+        { name: '🎮 Game', value: LINKS.game, inline: true },
+        { name: '🌐 Website', value: LINKS.website, inline: true },
         { name: '​', value: '​', inline: true },
-        { name: '🐦 Twitter / X', value: '`TBD`', inline: true },
-        { name: '📜 Token Contract', value: '`TBD`', inline: true },
+        { name: '🐦 Twitter / X', value: LINKS.twitter, inline: true },
+        { name: '📜 Token Contract', value: `\`${LINKS.contract}\``, inline: true },
         { name: '​', value: '​', inline: true },
         {
           name: '⚠️ Warning',
@@ -249,7 +258,7 @@ const EMBEDS = {
         {
           name: '✨ Example',
           value:
-            '```\nFarm name: Samosa Ranch\nFarm link: https://play.YOURDOMAIN.com/?farm=your-farm-slug\nFeedback: Tell me if my farm layout looks good.\n```',
+            '```\nFarm name: Samosa Ranch\nFarm link: ' + LINKS.game + '/?farm=your-farm-slug\nFeedback: Tell me if my farm layout looks good.\n```',
         },
       ),
 
@@ -292,7 +301,7 @@ const EMBEDS = {
     baseEmbed(ctx, COLORS.blue)
       .setTitle('🧪 Current Test Build')
       .addFields(
-        { name: '🎮 Game', value: 'https://play.YOURDOMAIN.com' },
+        { name: '🎮 Game', value: LINKS.game },
         {
           name: '✅ Please test',
           value: [
@@ -442,8 +451,8 @@ const EMBEDS = {
         'Start your farm, grow crops, visit friends, and compete for rewards. Welcome to the community! 🚜',
       )
       .addFields(
-        { name: '🎮 Play Now', value: 'https://play.YOURDOMAIN.com', inline: true },
-        { name: '🌐 Website', value: 'https://YOURDOMAIN.com', inline: true },
+        { name: '🎮 Play Now', value: LINKS.game, inline: true },
+        { name: '🌐 Website', value: LINKS.website, inline: true },
         {
           name: '✨ What you can do',
           value: [
