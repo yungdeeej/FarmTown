@@ -585,7 +585,7 @@ async function ensureRoles(guild) {
         () =>
           guild.roles.create({
             name: role.name,
-            color: role.color,
+            colors: { primaryColor: role.color },
             hoist: !!role.hoist,
             mentionable: false,
             permissions: new PermissionsBitField(role.permissions || []),
@@ -709,8 +709,10 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
 async function postAndPin(channel, content) {
   const me = channel.client.user.id;
 
-  const pinned = await withRetry(() => channel.messages.fetchPinned(), `fetch pins ${channel.name}`);
-  const alreadyPinned = pinned.find((m) => m.author.id === me && m.content.trim() === content);
+  const pinned = await withRetry(() => channel.messages.fetchPins(), `fetch pins ${channel.name}`);
+  const alreadyPinned = pinned.items.some(
+    ({ message: m }) => m.author.id === me && m.content.trim() === content,
+  );
   if (alreadyPinned) {
     log('PIN-SKIP', `already pinned in #${channel.name}`);
     counts.pinSkipped += 1;
