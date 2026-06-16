@@ -1,0 +1,16 @@
+{
+  "name": "farmtown-discord-setup",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Idempotent discord.js v14 script that builds out the FarmTown launch server.",
+  "main": "discord-setup.js",
+  "scripts": {
+    "setup": "node discord-setup.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3"
+  }
+}
