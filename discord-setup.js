@@ -64,6 +64,12 @@ const FORCE_ICON = process.env.FORCE_ICON === '1';
 //   'bot'     - custom buttons, driven by engagement-bot.js (needs a host)
 const SELF_ROLE_MODE = 'carlbot';
 
+// Human-verification gate. When on, unverified members see only #verify and
+// #rules; the VERIFIED_ROLE unlocks the rest. A verification bot (Wick captcha)
+// grants VERIFIED_ROLE after a member passes. Farmer doubles as the access key.
+const VERIFICATION_GATE = true;
+const VERIFIED_ROLE = 'Farmer';
+
 // Official FarmTown links used throughout the embeds. Update here, re-run, and
 // the pinned messages update in place. Leave a value as 'TBD' until known.
 const LINKS = {
@@ -492,6 +498,26 @@ const EMBEDS = {
     return e;
   },
 
+  verifyInfo: (ctx) =>
+    baseEmbed(ctx, COLORS.green)
+      .setTitle('✅ Verify to Enter FarmTown')
+      .setThumbnail(ctx.logo || null)
+      .setDescription(
+        'To keep the community safe from bots and scammers, you need to verify before you can access the server.',
+      )
+      .addFields(
+        {
+          name: '🔓 How to verify',
+          value:
+            'Follow the verification prompt in this channel (or check your DMs) and complete the quick captcha. Once done, the rest of the server unlocks automatically.',
+        },
+        {
+          name: '🛡️ Reminder',
+          value:
+            'Admins will **never** DM you first or ask for your seed phrase. Only trust links here once you’re in.',
+        },
+      ),
+
   ticketInfo: (ctx) =>
     baseEmbed(ctx, COLORS.blurple)
       .setTitle('🎫 Support Tickets')
@@ -540,8 +566,11 @@ const STRUCTURE = [
   {
     name: '📌 INFORMATION',
     channels: [
+      // verify: gate entry. Visible to everyone (incl. unverified); Wick runs it.
+      { name: '✅・verify', phase: 1, gateEntry: true, allowSend: ['Wick'], position: 0, posts: ['verifyInfo'] },
       { name: '📣・announcements', phase: 1, readOnly: true, posts: ['launchAnnouncement'] },
-      { name: '📋・rules', phase: 1, readOnly: true, posts: ['rules'] },
+      // rules: stays visible to unverified members so they can read before verifying.
+      { name: '📋・rules', phase: 1, readOnly: true, gateVisible: true, posts: ['rules'] },
       { name: '👋・welcome', phase: 1, readOnly: true, posts: ['welcome'] },
       { name: '🎭・get-roles', phase: 1, readOnly: true, selfRoles: true },
       { name: '📰・updates', phase: 2, readOnly: true },
@@ -811,6 +840,10 @@ async function ensureChannels(guild, categoryMap) {
         counts.created += 1;
         await sleep(500);
       }
+      // Pin specific channels (e.g. #verify) to the top of their category.
+      if (typeof ch.position === 'number' && existing.position !== ch.position) {
+        await withRetry(() => existing.setPosition(ch.position), `position ${ch.name}`);
+      }
       built.push({ channel: existing, meta: ch, category: cat });
     }
   }
@@ -851,6 +884,22 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
   const everyone = guild.roles.everyone;
   const muted = roleMap.get('Muted');
   const staffRoles = STAFF_ROLE_NAMES.map((n) => roleMap.get(n)).filter(Boolean);
+  const verified = VERIFICATION_GATE ? roleMap.get(VERIFIED_ROLE) : null;
+  if (VERIFICATION_GATE && !verified) {
+    log('WARN', `verification gate on but role "${VERIFIED_ROLE}" not found — gate skipped`);
+  }
+  const gateOn = VERIFICATION_GATE && !!verified;
+
+  // Bot (managed) roles without Administrator would lose access when the gate
+  // hides channels from @everyone — grant them view so they keep working.
+  const gateBotRoles = gateOn
+    ? [...guild.roles.cache.values()].filter(
+        (r) => r.managed && !r.permissions.has(Flags.Administrator),
+      )
+    : [];
+  if (gateOn) {
+    log('INFO', `gate: granting view to non-admin bot roles: ${gateBotRoles.map((r) => r.name).join(', ') || 'none'}`);
+  }
 
   const denySend = {
     SendMessages: false,
@@ -883,6 +932,34 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
       }
       log('PERMS', `team-only category locked: ${cat.name}`);
       counts.perms += 1;
+    } else if (gateOn) {
+      // Verification gate: hide the category from @everyone, show it to verified
+      // members. Channels that must stay visible (verify/rules) re-allow @everyone
+      // at the channel level below.
+      await withRetry(
+        () => parent.permissionOverwrites.edit(everyone, { ViewChannel: false }, { reason: REASON }),
+        `gate hide category ${cat.name}`,
+      );
+      await withRetry(
+        () =>
+          parent.permissionOverwrites.edit(
+            verified,
+            { ViewChannel: true, ReadMessageHistory: true },
+            { reason: REASON },
+          ),
+        `gate allow ${VERIFIED_ROLE} @ ${cat.name}`,
+      );
+      for (const bot of gateBotRoles) {
+        await withRetry(
+          () =>
+            parent.permissionOverwrites.edit(
+              bot,
+              { ViewChannel: true, ReadMessageHistory: true },
+              { reason: REASON },
+            ),
+          `gate allow bot ${bot.name} @ ${cat.name}`,
+        );
+      }
     }
 
     if (muted) {
@@ -896,30 +973,8 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
 
   // --- Channels ---
   for (const { channel, meta, category } of builtChannels) {
-    if (meta.readOnly) {
-      await withRetry(
-        () =>
-          channel.permissionOverwrites.edit(
-            everyone,
-            {
-              ViewChannel: true,
-              ReadMessageHistory: true,
-              AddReactions: true,
-              SendMessages: false,
-              SendMessagesInThreads: false,
-              CreatePublicThreads: false,
-              CreatePrivateThreads: false,
-            },
-            { reason: REASON },
-          ),
-        `read-only overwrite ${meta.name}`,
-      );
-      log('PERMS', `read-only: ${meta.name}`);
-      counts.perms += 1;
-    }
-
     if (category.teamOnly) {
-      // Ensure the child channel is also locked even if it isn't synced.
+      // Hidden from @everyone, visible to staff (independent of the gate).
       await withRetry(
         () => channel.permissionOverwrites.edit(everyone, { ViewChannel: false }, { reason: REASON }),
         `team-only hide channel ${meta.name}`,
@@ -935,11 +990,54 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
           `team-only allow ${role.name} @ ${meta.name}`,
         );
       }
+    } else {
+      // Compute the @everyone overwrite from gate + read-only + gate-exception flags.
+      const everyoneCanView = !gateOn || !!meta.gateEntry || !!meta.gateVisible;
+      const ev = { ViewChannel: everyoneCanView, ReadMessageHistory: everyoneCanView };
+      if (meta.readOnly || meta.gateEntry) {
+        Object.assign(ev, {
+          SendMessages: false,
+          SendMessagesInThreads: false,
+          CreatePublicThreads: false,
+          CreatePrivateThreads: false,
+          AddReactions: true,
+        });
+      }
+      await withRetry(
+        () => channel.permissionOverwrites.edit(everyone, ev, { reason: REASON }),
+        `everyone overwrite ${meta.name}`,
+      );
+      // Verified members can view every non-team channel (send governed by base
+      // perms; read-only channels keep the @everyone send-deny which also blocks
+      // verified members since they get no send allow here).
+      if (gateOn) {
+        await withRetry(
+          () =>
+            channel.permissionOverwrites.edit(
+              verified,
+              { ViewChannel: true, ReadMessageHistory: true },
+              { reason: REASON },
+            ),
+          `gate allow ${VERIFIED_ROLE} @ ${meta.name}`,
+        );
+        for (const bot of gateBotRoles) {
+          await withRetry(
+            () =>
+              channel.permissionOverwrites.edit(
+                bot,
+                { ViewChannel: true, ReadMessageHistory: true },
+                { reason: REASON },
+              ),
+            `gate allow bot ${bot.name} @ ${meta.name}`,
+          );
+        }
+      }
+      if (meta.readOnly || meta.gateEntry) log('PERMS', `read-only: ${meta.name}`);
+      counts.perms += 1;
     }
 
     // Grant specific (bot) roles send access in a read-only channel, e.g. so
-    // Ticket Tool can post its panel in #open-a-ticket. Best-effort: skipped if
-    // the role isn't in the server yet.
+    // Ticket Tool posts its panel and Wick can run the verify channel.
     if (meta.allowSend) {
       for (const roleName of meta.allowSend) {
         const role = guild.roles.cache.find((r) => r.name === roleName);
@@ -1249,11 +1347,11 @@ async function main() {
   // Onboarding -> Default Channels & Roles.
   const farmer = roleMap.get('Farmer');
   if (farmer) {
-    log(
-      'INFO',
-      `Farmer role ready (${farmer.id}). Auto-assign on join is handled by engagement-bot.js ` +
-        '(or set it via Server Settings -> Onboarding -> Default Channels & Roles).',
-    );
+    const note = VERIFICATION_GATE
+      ? `Farmer role ready (${farmer.id}) and used as the verification key. ` +
+        'Configure Wick to grant "Farmer" after a member passes verification — do NOT auto-assign it on join.'
+      : `Farmer role ready (${farmer.id}). Auto-assign on join via Carl-bot autorole or engagement-bot.js.`;
+    log('INFO', note);
   }
 
   log(

@@ -61,6 +61,27 @@ one is already set.
 - Sets the server icon, routes native join messages to `#general`, and clears
   any stale bot nickname so the current bot username shows.
 
+## Verification gate (Wick)
+
+`VERIFICATION_GATE = true` in `discord-setup.js` hides the whole server from
+unverified members — they see only `#verify` and `#rules`. The `Farmer` role is
+the access key: once a member verifies, they get it and the server unlocks.
+
+Non-admin bot roles (Carl-bot, Ticket Tool) are auto-granted view so they keep
+working behind the gate.
+
+To finish, in [Wick](https://wickbot.com) (you already have it):
+
+1. **Verification** → enable it, set the **verified role to `Farmer`**, and pick
+   the captcha/verification style.
+2. Point the verification at `#verify` (or let Wick DM new members).
+3. **Do NOT** auto-assign `Farmer` on join (Carl-bot autorole) — that would let
+   bots skip verification. Wick grants `Farmer` only after a member passes.
+
+> Existing members without `Farmer` will be limited to `#verify`/`#rules` until
+> they verify (or you grant them `Farmer`). Set `VERIFICATION_GATE = false` and
+> re-run to lift the gate.
+
 ## 2. Self-roles + auto-role
 
 Two ways to power the `#get-roles` panel and auto-assign the Farmer role on
