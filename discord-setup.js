@@ -509,7 +509,7 @@ const EMBEDS = {
         {
           name: '🔓 How to verify',
           value:
-            'Follow the verification prompt in this channel (or check your DMs) and complete the quick captcha. Once done, the rest of the server unlocks automatically.',
+            'React with ✅ below to verify. Once you do, the rest of the server unlocks for you automatically.',
         },
         {
           name: '🛡️ Reminder',
@@ -566,8 +566,9 @@ const STRUCTURE = [
   {
     name: '📌 INFORMATION',
     channels: [
-      // verify: gate entry. Visible to everyone (incl. unverified); Wick runs it.
-      { name: '✅・verify', phase: 1, gateEntry: true, allowSend: ['Wick'], position: 0, posts: ['verifyInfo'] },
+      // verify: gate entry. Visible to everyone (incl. unverified); Carl-bot
+      // grants Farmer when a member clicks the ✅ reaction (bound in Carl-bot).
+      { name: '✅・verify', phase: 1, gateEntry: true, allowSend: ['Wick'], position: 0, posts: ['verifyInfo'], reactWith: ['✅'] },
       { name: '📣・announcements', phase: 1, readOnly: true, posts: ['launchAnnouncement'] },
       // rules: stays visible to unverified members so they can read before verifying.
       { name: '📋・rules', phase: 1, readOnly: true, gateVisible: true, posts: ['rules'] },
@@ -1296,7 +1297,12 @@ async function postContent(guild, builtChannels, roleMap) {
         log('WARN', `missing embed "${key}" for ${meta.name}`);
         continue;
       }
-      await upsertMessage(channel, builder(ctx), undefined, assetFiles);
+      const msg = await upsertMessage(channel, builder(ctx), undefined, assetFiles);
+      // Pre-add reactions (e.g. ✅ on #verify) so they're ready to bind in Carl-bot.
+      if (meta.reactWith && msg && key === meta.posts[0]) {
+        await ensureReactions(msg, meta.reactWith);
+        log('REACT', `ensured ${meta.reactWith.join(' ')} on #${channel.name}`);
+      }
     }
   }
 }
