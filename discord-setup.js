@@ -661,7 +661,7 @@ const ROLES = [
     hoist: true,
     permissions: [
       Flags.ModerateMembers, Flags.ManageMessages, Flags.ManageThreads,
-      Flags.KickMembers, Flags.ViewAuditLog,
+      Flags.KickMembers, Flags.BanMembers, Flags.ViewAuditLog,
     ],
   },
   {
@@ -857,8 +857,19 @@ async function ensureRoles(guild) {
     if (role.phase === 2 && !PHASE_2) continue;
     let existing = findRole(guild, role.name);
     if (existing) {
-      log('SKIP', `role exists: ${role.name}`);
-      counts.skipped += 1;
+      // Reconcile permissions so config stays the source of truth for our roles.
+      const desired = new PermissionsBitField(role.permissions || []);
+      if (existing.permissions.bitfield !== desired.bitfield) {
+        await withRetry(
+          () => existing.setPermissions(desired, 'Reconcile role permissions'),
+          `update perms ${role.name}`,
+        );
+        log('UPDATE', `role permissions: ${role.name}`);
+        counts.updated += 1;
+      } else {
+        log('SKIP', `role exists: ${role.name}`);
+        counts.skipped += 1;
+      }
     } else {
       existing = await withRetry(
         () =>
@@ -898,8 +909,16 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
         (r) => r.managed && !r.permissions.has(Flags.Administrator),
       )
     : [];
+
+  // Roles that get view access to every non-team channel behind the gate:
+  // the verified role, non-admin staff (so mods/admins/devs aren't locked out),
+  // and non-admin bots. Admins (e.g. Founder) bypass via the Administrator perm.
+  const nonAdminStaff = staffRoles.filter((r) => !r.permissions.has(Flags.Administrator));
+  const gateViewRoles = gateOn
+    ? [...new Map([verified, ...nonAdminStaff, ...gateBotRoles].map((r) => [r.id, r])).values()]
+    : [];
   if (gateOn) {
-    log('INFO', `gate: granting view to non-admin bot roles: ${gateBotRoles.map((r) => r.name).join(', ') || 'none'}`);
+    log('INFO', `gate view granted to: ${gateViewRoles.map((r) => r.name).join(', ')}`);
   }
 
   const denySend = {
@@ -941,24 +960,15 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
         () => parent.permissionOverwrites.edit(everyone, { ViewChannel: false }, { reason: REASON }),
         `gate hide category ${cat.name}`,
       );
-      await withRetry(
-        () =>
-          parent.permissionOverwrites.edit(
-            verified,
-            { ViewChannel: true, ReadMessageHistory: true },
-            { reason: REASON },
-          ),
-        `gate allow ${VERIFIED_ROLE} @ ${cat.name}`,
-      );
-      for (const bot of gateBotRoles) {
+      for (const role of gateViewRoles) {
         await withRetry(
           () =>
             parent.permissionOverwrites.edit(
-              bot,
+              role,
               { ViewChannel: true, ReadMessageHistory: true },
               { reason: REASON },
             ),
-          `gate allow bot ${bot.name} @ ${cat.name}`,
+          `gate allow ${role.name} @ ${cat.name}`,
         );
       }
     }
@@ -1012,24 +1022,15 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
       // perms; read-only channels keep the @everyone send-deny which also blocks
       // verified members since they get no send allow here).
       if (gateOn) {
-        await withRetry(
-          () =>
-            channel.permissionOverwrites.edit(
-              verified,
-              { ViewChannel: true, ReadMessageHistory: true },
-              { reason: REASON },
-            ),
-          `gate allow ${VERIFIED_ROLE} @ ${meta.name}`,
-        );
-        for (const bot of gateBotRoles) {
+        for (const role of gateViewRoles) {
           await withRetry(
             () =>
               channel.permissionOverwrites.edit(
-                bot,
+                role,
                 { ViewChannel: true, ReadMessageHistory: true },
                 { reason: REASON },
               ),
-            `gate allow bot ${bot.name} @ ${meta.name}`,
+            `gate allow ${role.name} @ ${meta.name}`,
           );
         }
       }
