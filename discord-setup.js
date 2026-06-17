@@ -71,6 +71,7 @@ const LINKS = {
   website: 'https://farmtown.online',
   twitter: 'https://x.com/playfarmtown',
   contract: 'yMJPZbnhoHib3ib8n8PfiVcp9yauk1vnaGKLx7epump',
+  dex: 'https://dexscreener.com/solana/frxrs52rlf45nywimjeoquh4g7crry7ny13fxn6t4dd',
 };
 
 const REASON = 'FarmTown automated server setup';
@@ -198,8 +199,9 @@ const EMBEDS = {
         { name: '🌐 Website', value: LINKS.website, inline: true },
         { name: '​', value: '​', inline: true },
         { name: '🐦 Twitter / X', value: LINKS.twitter, inline: true },
-        { name: '📜 Token Contract', value: `\`${LINKS.contract}\``, inline: true },
+        { name: '📈 Chart (Dexscreener)', value: LINKS.dex, inline: true },
         { name: '​', value: '​', inline: true },
+        { name: '📜 Token Contract', value: `\`${LINKS.contract}\``, inline: false },
         {
           name: '⚠️ Warning',
           value:
@@ -1015,7 +1017,16 @@ async function upsertMessage(channel, embed, components, assetFiles) {
   );
   await cleanupLegacyText(channel, recent, me);
 
-  const existing = recent.find((m) => m.author.id === me && m.embeds[0]?.title === title);
+  // Our content is always pinned, so check pins too — in busy channels (e.g.
+  // #general with join messages) the message can scroll past the recent window.
+  const pins = await withRetry(() => channel.messages.fetchPins(), `fetch pins ${channel.name}`);
+  const byId = new Map();
+  for (const { message: m } of pins.items) byId.set(m.id, m);
+  for (const m of recent.values()) byId.set(m.id, m);
+
+  const existing = [...byId.values()].find(
+    (m) => m.author.id === me && m.embeds[0]?.title === title,
+  );
 
   if (!existing) {
     const msg = await withRetry(() => channel.send(payload), `post in ${channel.name}`);
