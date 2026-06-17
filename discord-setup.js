@@ -70,7 +70,7 @@ const LINKS = {
   game: 'https://play.farmtown.online',
   website: 'https://farmtown.online',
   twitter: 'https://x.com/playfarmtown',
-  contract: 'TBD',
+  contract: 'yMJPZbnhoHib3ib8n8PfiVcp9yauk1vnaGKLx7epump',
 };
 
 const REASON = 'FarmTown automated server setup';
