@@ -491,6 +491,35 @@ const EMBEDS = {
     }
     return e;
   },
+
+  ticketInfo: (ctx) =>
+    baseEmbed(ctx, COLORS.blurple)
+      .setTitle('🎫 Support Tickets')
+      .setThumbnail(ctx.logo || null)
+      .setDescription(
+        'Need private help? Use the **ticket panel below** to open a private channel with the team.',
+      )
+      .addFields(
+        {
+          name: '🧾 Use a ticket for',
+          value: [
+            '• Wallet login issues',
+            '• Stars / payment issues',
+            '• Farmer’s Pool issues',
+            '• Sensitive or private bug reports',
+            '• Partnership / media',
+          ].join('\n'),
+        },
+        {
+          name: '💡 For general questions',
+          value: `Check ${ctx.m('❓・faq')} first, and report public bugs in ${ctx.m('🐛・bug-reports')}.`,
+        },
+        {
+          name: '🛡️ Safety',
+          value:
+            'Staff will **never** ask for your seed phrase or private keys, or ask you to connect your wallet to a link. Real support only happens inside a ticket here.',
+        },
+      ),
 };
 
 // ---------------------------------------------------------------------------
@@ -557,8 +586,9 @@ const STRUCTURE = [
     name: '🤖 SUPPORT',
     channels: [
       { name: '❓・faq', phase: 1, posts: ['faq'] },
-      // open-a-ticket: placeholder only. Ticket Tool is configured manually.
-      { name: '🎫・open-a-ticket', phase: 1 },
+      // open-a-ticket: read-only panel channel. Ticket Tool posts its panel here
+      // (allowSend grants it permission); members only click the ticket button.
+      { name: '🎫・open-a-ticket', phase: 1, readOnly: true, allowSend: ['Ticket Tool'], posts: ['ticketInfo'] },
     ],
   },
   {
@@ -904,6 +934,37 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
             ),
           `team-only allow ${role.name} @ ${meta.name}`,
         );
+      }
+    }
+
+    // Grant specific (bot) roles send access in a read-only channel, e.g. so
+    // Ticket Tool can post its panel in #open-a-ticket. Best-effort: skipped if
+    // the role isn't in the server yet.
+    if (meta.allowSend) {
+      for (const roleName of meta.allowSend) {
+        const role = guild.roles.cache.find((r) => r.name === roleName);
+        if (!role) {
+          log('INFO', `allowSend: role "${roleName}" not found — skipping for ${meta.name}`);
+          continue;
+        }
+        await withRetry(
+          () =>
+            channel.permissionOverwrites.edit(
+              role,
+              {
+                ViewChannel: true,
+                SendMessages: true,
+                EmbedLinks: true,
+                AttachFiles: true,
+                ReadMessageHistory: true,
+                ManageMessages: true,
+              },
+              { reason: REASON },
+            ),
+          `allowSend ${roleName} @ ${meta.name}`,
+        );
+        log('PERMS', `allow send: ${roleName} in ${meta.name}`);
+        counts.perms += 1;
       }
     }
 
