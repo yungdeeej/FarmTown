@@ -950,6 +950,13 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
     AddReactions: false,
   };
 
+  // Threads are off for @everyone everywhere — a common scam-link vector.
+  const noThreads = {
+    CreatePublicThreads: false,
+    CreatePrivateThreads: false,
+    SendMessagesInThreads: false,
+  };
+
   // --- Categories ---
   for (const cat of STRUCTURE) {
     const parent = categoryMap.get(cat.name);
@@ -957,7 +964,7 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
 
     if (cat.teamOnly) {
       await withRetry(
-        () => parent.permissionOverwrites.edit(everyone, { ViewChannel: false }, { reason: REASON }),
+        () => parent.permissionOverwrites.edit(everyone, { ViewChannel: false, ...noThreads }, { reason: REASON }),
         `team-only hide ${cat.name}`,
       );
       for (const role of staffRoles) {
@@ -978,7 +985,7 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
       // members. Channels that must stay visible (verify/rules) re-allow @everyone
       // at the channel level below.
       await withRetry(
-        () => parent.permissionOverwrites.edit(everyone, { ViewChannel: false }, { reason: REASON }),
+        () => parent.permissionOverwrites.edit(everyone, { ViewChannel: false, ...noThreads }, { reason: REASON }),
         `gate hide category ${cat.name}`,
       );
       for (const role of gateViewRoles) {
@@ -1008,7 +1015,7 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
     if (category.teamOnly) {
       // Hidden from @everyone, visible to staff (independent of the gate).
       await withRetry(
-        () => channel.permissionOverwrites.edit(everyone, { ViewChannel: false }, { reason: REASON }),
+        () => channel.permissionOverwrites.edit(everyone, { ViewChannel: false, ...noThreads }, { reason: REASON }),
         `team-only hide channel ${meta.name}`,
       );
       for (const role of staffRoles) {
@@ -1025,15 +1032,10 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
     } else {
       // Compute the @everyone overwrite from gate + read-only + gate-exception flags.
       const everyoneCanView = !gateOn || !!meta.gateEntry || !!meta.gateVisible;
-      const ev = { ViewChannel: everyoneCanView, ReadMessageHistory: everyoneCanView };
+      // Thread creation/posting is always denied to @everyone (anti-scam).
+      const ev = { ViewChannel: everyoneCanView, ReadMessageHistory: everyoneCanView, ...noThreads };
       if (meta.readOnly || meta.gateEntry) {
-        Object.assign(ev, {
-          SendMessages: false,
-          SendMessagesInThreads: false,
-          CreatePublicThreads: false,
-          CreatePrivateThreads: false,
-          AddReactions: true,
-        });
+        Object.assign(ev, { SendMessages: false, AddReactions: true });
       }
       await withRetry(
         () => channel.permissionOverwrites.edit(everyone, ev, { reason: REASON }),
