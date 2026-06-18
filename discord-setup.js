@@ -692,6 +692,7 @@ const ROLES = [
     permissions: [
       Flags.ModerateMembers, Flags.ManageMessages, Flags.ManageThreads,
       Flags.KickMembers, Flags.BanMembers, Flags.ViewAuditLog,
+      Flags.ManageChannels, // lets Ticket Tool's "close" work for mods
       ...STAFF_POST_PERMS,
     ],
   },
