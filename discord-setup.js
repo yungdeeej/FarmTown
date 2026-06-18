@@ -34,6 +34,9 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  AutoModerationRuleEventType,
+  AutoModerationRuleTriggerType,
+  AutoModerationActionType,
 } = require('discord.js');
 
 const Flags = PermissionsBitField.Flags;
@@ -640,6 +643,18 @@ const STRUCTURE = [
 // Optional Future roles only created under PHASE_2.
 // ---------------------------------------------------------------------------
 
+// Baseline for @everyone and general members: plain-text chat + voice only.
+const MEMBER_BASE_PERMS = [
+  Flags.ViewChannel, Flags.SendMessages, Flags.ReadMessageHistory,
+  Flags.Connect, Flags.Speak, Flags.UseVAD,
+];
+
+// Rich-posting perms restored to staff so they can still share links/media.
+const STAFF_POST_PERMS = [
+  Flags.EmbedLinks, Flags.AttachFiles, Flags.AddReactions,
+  Flags.UseExternalEmojis, Flags.UseExternalStickers,
+];
+
 const ROLES = [
   // Staff
   { name: 'Founder', phase: 1, color: 0xe74c3c, hoist: true, permissions: [Flags.Administrator] },
@@ -652,6 +667,7 @@ const ROLES = [
       Flags.ManageChannels, Flags.ManageRoles, Flags.ManageMessages,
       Flags.BanMembers, Flags.KickMembers, Flags.ManageGuild,
       Flags.ModerateMembers, Flags.ManageThreads, Flags.ViewAuditLog,
+      ...STAFF_POST_PERMS,
     ],
   },
   {
@@ -662,6 +678,7 @@ const ROLES = [
     permissions: [
       Flags.ModerateMembers, Flags.ManageMessages, Flags.ManageThreads,
       Flags.KickMembers, Flags.BanMembers, Flags.ViewAuditLog,
+      ...STAFF_POST_PERMS,
     ],
   },
   {
@@ -669,14 +686,14 @@ const ROLES = [
     phase: 1,
     color: 0x9b59b6,
     hoist: true,
-    permissions: [Flags.ManageMessages, Flags.ManageThreads],
+    permissions: [Flags.ManageMessages, Flags.ManageThreads, ...STAFF_POST_PERMS],
   },
   {
     name: 'Community Manager',
     phase: 1,
     color: 0x1abc9c,
     hoist: true,
-    permissions: [Flags.ManageMessages, Flags.ManageEvents, Flags.MentionEveryone],
+    permissions: [Flags.ManageMessages, Flags.ManageEvents, Flags.MentionEveryone, ...STAFF_POST_PERMS],
   },
   // Community
   {
@@ -685,11 +702,11 @@ const ROLES = [
     color: 0x2ecc71,
     hoist: false,
     isDefaultMember: true,
+    // Locked down: plain-text chat + voice only. No links/files/embeds/reactions
+    // /threads/external emoji — scam-link protection. Staff keep the rich perms.
     permissions: [
-      Flags.ViewChannel, Flags.SendMessages, Flags.SendMessagesInThreads,
-      Flags.ReadMessageHistory, Flags.AddReactions, Flags.AttachFiles,
-      Flags.EmbedLinks, Flags.UseExternalEmojis, Flags.Connect, Flags.Speak,
-      Flags.CreatePublicThreads,
+      Flags.ViewChannel, Flags.SendMessages, Flags.ReadMessageHistory,
+      Flags.Connect, Flags.Speak, Flags.UseVAD,
     ],
   },
   { name: 'Early Farmer', phase: 1, color: 0x27ae60, hoist: false, permissions: [] },
@@ -1312,6 +1329,89 @@ async function postContent(guild, builtChannels, roleMap) {
 // Main
 // ---------------------------------------------------------------------------
 
+// Restrict the @everyone role to plain-text chat + voice, so no general member
+// can post links, files, embeds, external emoji, etc. anywhere by default.
+async function restrictEveryone(guild) {
+  const desired = new PermissionsBitField(MEMBER_BASE_PERMS);
+  if (guild.roles.everyone.permissions.bitfield === desired.bitfield) {
+    log('SKIP', '@everyone already locked to text + voice');
+    return;
+  }
+  await withRetry(
+    () => guild.roles.everyone.setPermissions(desired, 'Lock down general member permissions'),
+    'restrict @everyone',
+  );
+  log('PERMS', '@everyone restricted to text chat + voice only');
+  counts.perms += 1;
+}
+
+// Create/refresh an AutoMod rule that blocks links in chat (the real fix for
+// scam/drainer links — removing Embed Links only stops previews, not the text).
+// Staff roles and the read-only info channels are exempt.
+async function ensureAutoMod(guild, roleMap) {
+  const NAME = 'FarmTown: Block links';
+  const text = (n) => guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.name === n);
+
+  const exemptRoles = STAFF_ROLE_NAMES.map((n) => roleMap.get(n)).filter(Boolean).map((r) => r.id);
+  const exemptChannels = [
+    '🔗・official-links', '📣・announcements', '👋・welcome', '🎮・how-to-play',
+    '📋・rules', '📰・updates', '🐞・bug-fixes', '🎭・get-roles', '✅・verify',
+  ].map(text).filter(Boolean).map((c) => c.id);
+
+  const modlog = text('mod-log');
+  const actions = [
+    {
+      type: AutoModerationActionType.BlockMessage,
+      metadata: { customMessage: "Links aren't allowed in chat. Official links are in #official-links." },
+    },
+  ];
+  if (modlog) {
+    actions.push({ type: AutoModerationActionType.SendAlertMessage, metadata: { channel: modlog.id } });
+  }
+
+  const options = {
+    name: NAME,
+    eventType: AutoModerationRuleEventType.MessageSend,
+    triggerType: AutoModerationRuleTriggerType.Keyword,
+    triggerMetadata: {
+      // Wildcard keywords (case-insensitive) — block URLs, invites and domains.
+      keywordFilter: [
+        '*http*', '*www.*', '*discord.gg*', '*discord.com/invite*', '*t.me*',
+        '*.com*', '*.net*', '*.org*', '*.io*', '*.xyz*', '*.app*', '*.fun*',
+        '*.fi*', '*.finance*', '*.vip*', '*.gift*', '*.claim*', '*.live*',
+        '*.click*', '*.top*', '*.online*', '*.sol*', '*.link*', '*.cc*', '*.gg*',
+      ],
+    },
+    actions,
+    enabled: true,
+    exemptRoles,
+    exemptChannels,
+    reason: 'Scam/drainer link protection',
+  };
+
+  let existing;
+  try {
+    const rules = await withRetry(() => guild.autoModerationRules.fetch(), 'fetch automod');
+    existing = rules.find((r) => r.name === NAME);
+  } catch (err) {
+    log('WARN', `could not read AutoMod rules: ${err.message}`);
+  }
+
+  try {
+    if (existing) {
+      await withRetry(() => existing.edit(options), 'update automod rule');
+      log('UPDATE', `AutoMod link-block rule (exempt: ${exemptRoles.length} roles, ${exemptChannels.length} channels)`);
+      counts.updated += 1;
+    } else {
+      await withRetry(() => guild.autoModerationRules.create(options), 'create automod rule');
+      log('CREATE', `AutoMod link-block rule (exempt: ${exemptRoles.length} roles, ${exemptChannels.length} channels)`);
+      counts.created += 1;
+    }
+  } catch (err) {
+    log('WARN', `could not set AutoMod rule: ${err.message}`);
+  }
+}
+
 async function main() {
   const token = process.env.DISCORD_BOT_TOKEN;
   const guildId = process.env.GUILD_ID;
@@ -1341,6 +1441,10 @@ async function main() {
 
   // 4) Permission overwrites (needs roles to exist)
   await applyPermissions(guild, categoryMap, builtChannels, roleMap);
+
+  // 4b) Lock down general members to text + voice, and block links via AutoMod.
+  await restrictEveryone(guild);
+  await ensureAutoMod(guild, roleMap);
 
   // Refresh the channel cache so embeds can resolve mentions/icon for new channels.
   await withRetry(() => guild.channels.fetch(), 'refetch channels');
