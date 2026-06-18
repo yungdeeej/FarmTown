@@ -73,6 +73,10 @@ const SELF_ROLE_MODE = 'carlbot';
 const VERIFICATION_GATE = true;
 const VERIFIED_ROLE = 'Farmer';
 
+// Only the official invite should work. General members can't create invites
+// (locked down below); every other existing invite is revoked on each run.
+const OFFICIAL_INVITE_CODE = 'b6KqrbqGrv';
+
 // Official FarmTown links used throughout the embeds. Update here, re-run, and
 // the pinned messages update in place. Leave a value as 'TBD' until known.
 const LINKS = {
@@ -1412,6 +1416,43 @@ async function ensureAutoMod(guild, roleMap) {
   }
 }
 
+// Revoke every invite except the official one, so it's the only way in.
+// (General members already can't create invites — CreateInstantInvite isn't in
+// MEMBER_BASE_PERMS — so only staff-made invites could exist.)
+async function enforceOfficialInvite(guild) {
+  let invites;
+  try {
+    invites = await withRetry(() => guild.invites.fetch(), 'fetch invites');
+  } catch (err) {
+    log('WARN', `could not fetch invites: ${err.message}`);
+    return;
+  }
+  let kept = null;
+  let revoked = 0;
+  for (const inv of invites.values()) {
+    if (inv.code === OFFICIAL_INVITE_CODE) {
+      kept = inv;
+      continue;
+    }
+    try {
+      await withRetry(() => inv.delete('Enforce official invite only'), `revoke invite ${inv.code}`);
+      revoked += 1;
+      await sleep(300);
+    } catch (err) {
+      log('WARN', `could not revoke invite ${inv.code}: ${err.message}`);
+    }
+  }
+  if (kept) {
+    const exp = kept.expiresAt ? kept.expiresAt.toISOString() : 'never';
+    log('INVITE', `kept official invite ${OFFICIAL_INVITE_CODE} (expires: ${exp}, uses: ${kept.uses}/${kept.maxUses || '∞'}); revoked ${revoked} other(s)`);
+    if (kept.expiresAt) {
+      log('WARN', `official invite ${OFFICIAL_INVITE_CODE} will EXPIRE — recreate it with "Never expire" + unlimited uses.`);
+    }
+  } else {
+    log('WARN', `official invite ${OFFICIAL_INVITE_CODE} not found (revoked ${revoked} other(s)). Create it via the server's channel invite, set Never expire + unlimited uses.`);
+  }
+}
+
 async function main() {
   const token = process.env.DISCORD_BOT_TOKEN;
   const guildId = process.env.GUILD_ID;
@@ -1442,9 +1483,11 @@ async function main() {
   // 4) Permission overwrites (needs roles to exist)
   await applyPermissions(guild, categoryMap, builtChannels, roleMap);
 
-  // 4b) Lock down general members to text + voice, and block links via AutoMod.
+  // 4b) Lock down general members to text + voice, block links via AutoMod, and
+  // make the official invite the only working one.
   await restrictEveryone(guild);
   await ensureAutoMod(guild, roleMap);
+  await enforceOfficialInvite(guild);
 
   // Refresh the channel cache so embeds can resolve mentions/icon for new channels.
   await withRetry(() => guild.channels.fetch(), 'refetch channels');
