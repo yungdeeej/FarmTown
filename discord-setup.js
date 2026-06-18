@@ -77,6 +77,16 @@ const VERIFIED_ROLE = 'Farmer';
 // (locked down below); every other existing invite is revoked on each run.
 const OFFICIAL_INVITE_CODE = 'b6KqrbqGrv';
 
+// Official domains/links exempt from the AutoMod link block (so legit farm
+// links etc. work while clone/drainer links are blocked). Substring match.
+const OFFICIAL_LINK_ALLOWLIST = [
+  'play.farmtown.online',
+  'farmtown.online',
+  'x.com/playfarmtown',
+  'discord.gg/b6KqrbqGrv',
+  'dexscreener.com',
+];
+
 // Official FarmTown links used throughout the embeds. Update here, re-run, and
 // the pinned messages update in place. Leave a value as 'TBD' until known.
 const LINKS = {
@@ -1386,7 +1396,10 @@ async function ensureAutoMod(guild, roleMap) {
         '*.com*', '*.net*', '*.org*', '*.io*', '*.xyz*', '*.app*', '*.fun*',
         '*.fi*', '*.finance*', '*.vip*', '*.gift*', '*.claim*', '*.live*',
         '*.click*', '*.top*', '*.online*', '*.sol*', '*.link*', '*.cc*', '*.gg*',
+        '*.vercel.app*', '*.netlify.app*', '*.ru*', '*.cn*', '*.lol*', '*.wtf*',
       ],
+      // Official links are exempt so legit farm/X/dex links still work.
+      allowList: OFFICIAL_LINK_ALLOWLIST,
     },
     actions,
     enabled: true,
