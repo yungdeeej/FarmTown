@@ -118,21 +118,29 @@ can't:
 - **Auto-role on join** — assigns the **Farmer** default member role to new
   members (this is how Farmer becomes a true default role).
 - **Welcome greeting** — posts a welcome embed mentioning the new member.
+- **Auto-responder** — when someone asks about play-to-earn / token / features /
+  roadmap in a chat channel, posts a canned reply — but **only if that reply
+  isn't already within the last N messages** (so it never spams).
 
 ```bash
 # Buttons only (no privileged intents needed):
 npm run bot
 
-# Buttons + auto-role + welcome (requires the privileged Server Members Intent,
-# enabled in the Developer Portal → Bot → Privileged Gateway Intents):
+# Buttons + auto-role + welcome (requires the privileged Server Members Intent):
 WELCOME_AUTOROLE=1 npm run bot
+
+# Add the P2E/token/features auto-responder (requires the privileged
+# Message Content Intent, enabled in Developer Portal → Bot → Privileged Intents):
+AUTORESPONDER=1 npm run bot
 
 # Smoke-test wiring and exit:
 npm run bot:selftest
 ```
 
-Env vars: `WELCOME_AUTOROLE` (`1` to enable join automation), `FARMER_ROLE`
-(default `Farmer`), `WELCOME_CHANNEL` (default `💬・general`), `SELFTEST`.
+Env vars: `WELCOME_AUTOROLE`, `FARMER_ROLE` (default `Farmer`), `WELCOME_CHANNEL`
+(default `💬・general`), `AUTORESPONDER` (`1` to enable), `AUTO_REPLY_CHANNELS`
+(default `💬・general,📊・token-chat,🌾・farm-chat`), `AUTO_REPLY_WINDOW`
+(default `15`), `SELFTEST`.
 
 ### Hosting the bot 24/7
 
