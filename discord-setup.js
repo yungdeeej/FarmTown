@@ -717,11 +717,12 @@ const ROLES = [
     color: 0x2ecc71,
     hoist: false,
     isDefaultMember: true,
-    // Locked down: plain-text chat + voice only. No links/files/embeds/reactions
-    // /threads/external emoji — scam-link protection. Staff keep the rich perms.
+    // Locked down: plain-text chat + voice. AttachFiles is granted at base so
+    // bug-reporters can upload screenshots in their own ticket, but it's denied
+    // on every public channel below — so uploads only work inside tickets.
     permissions: [
       Flags.ViewChannel, Flags.SendMessages, Flags.ReadMessageHistory,
-      Flags.Connect, Flags.Speak, Flags.UseVAD,
+      Flags.Connect, Flags.Speak, Flags.UseVAD, Flags.AttachFiles,
     ],
   },
   { name: 'Early Farmer', phase: 1, color: 0x27ae60, hoist: false, permissions: [] },
@@ -1043,8 +1044,15 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
     } else {
       // Compute the @everyone overwrite from gate + read-only + gate-exception flags.
       const everyoneCanView = !gateOn || !!meta.gateEntry || !!meta.gateVisible;
-      // Thread creation/posting is always denied to @everyone (anti-scam).
-      const ev = { ViewChannel: everyoneCanView, ReadMessageHistory: everyoneCanView, ...noThreads };
+      // Threads always denied (anti-scam); AttachFiles/EmbedLinks denied so the
+      // Farmer base AttachFiles only takes effect inside tickets, not public chat.
+      const ev = {
+        ViewChannel: everyoneCanView,
+        ReadMessageHistory: everyoneCanView,
+        AttachFiles: false,
+        EmbedLinks: false,
+        ...noThreads,
+      };
       if (meta.readOnly || meta.gateEntry) {
         Object.assign(ev, { SendMessages: false, AddReactions: true });
       }
@@ -1052,18 +1060,16 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
         () => channel.permissionOverwrites.edit(everyone, ev, { reason: REASON }),
         `everyone overwrite ${meta.name}`,
       );
-      // Verified members can view every non-team channel (send governed by base
-      // perms; read-only channels keep the @everyone send-deny which also blocks
-      // verified members since they get no send allow here).
+      // Verified members can view every non-team channel; staff additionally keep
+      // file/link posting (overrides the @everyone AttachFiles/EmbedLinks deny).
       if (gateOn) {
         for (const role of gateViewRoles) {
+          const isStaff = staffRoles.some((s) => s.id === role.id);
+          const grant = isStaff
+            ? { ViewChannel: true, ReadMessageHistory: true, AttachFiles: true, EmbedLinks: true }
+            : { ViewChannel: true, ReadMessageHistory: true };
           await withRetry(
-            () =>
-              channel.permissionOverwrites.edit(
-                role,
-                { ViewChannel: true, ReadMessageHistory: true },
-                { reason: REASON },
-              ),
+            () => channel.permissionOverwrites.edit(role, grant, { reason: REASON }),
             `gate allow ${role.name} @ ${meta.name}`,
           );
         }
