@@ -388,7 +388,7 @@ const EMBEDS = {
       .setTitle('🌿 Weed — Premium Crop')
       .setDescription("Weed is FarmTown's premium crop.")
       .addFields(
-        { name: '💰 Cost', value: '30 Stars per Weed seed', inline: true },
+        { name: '💰 Cost', value: '50 Stars per Weed seed', inline: true },
         { name: '⏱️ Grow time', value: '5 hours', inline: true },
         { name: '📈 Output', value: 'High Gold output', inline: true },
         { name: '🎲 Profile', value: 'Bought with Stars — premium crop risk/reward.' },
