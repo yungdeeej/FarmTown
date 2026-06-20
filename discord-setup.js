@@ -1404,6 +1404,8 @@ async function ensureAutoMod(guild, roleMap) {
         '*.fi*', '*.finance*', '*.vip*', '*.gift*', '*.claim*', '*.live*',
         '*.click*', '*.top*', '*.online*', '*.sol*', '*.link*', '*.cc*', '*.gg*',
         '*.vercel.app*', '*.netlify.app*', '*.ru*', '*.cn*', '*.lol*', '*.wtf*',
+        // Malicious app-authorization / OAuth links (e.g. "Dimitri API" scam).
+        '*oauth*', '*client_id*', '*/authorize*', '*application-directory*',
       ],
       // Official links are exempt so legit farm/X/dex links still work.
       allowList: OFFICIAL_LINK_ALLOWLIST,
