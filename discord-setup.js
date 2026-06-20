@@ -437,6 +437,34 @@ const EMBEDS = {
       })
       .setFooter({ text: 'Do not click suspicious links • Only trust official-links' }),
 
+  scamWarning: (ctx) =>
+    baseEmbed(ctx, COLORS.red)
+      .setTitle('⚠️ Active Scam: Fake "Support" & App-Authorize Links')
+      .setDescription(
+        'Scammers are using **fake apps/bots** (e.g. "Dimitri API") that ping you and say to ' +
+          '*"click submit-a-ticket"* or **authorize an app** for support. **It’s a wallet/account drainer.**',
+      )
+      .addFields(
+        {
+          name: '🚫 Never do this',
+          value:
+            'Do **not** click **"Authorize"** on any app link (anything with `oauth2`, `authorize`, or `client_id`). ' +
+            'We will **never** ask you to authorize an app, click an external "ticket" link, or DM you first.',
+        },
+        {
+          name: '✅ Real support',
+          value: `Support only happens in ${ctx.m('🎫・open-a-ticket')} — opened by **you** with the button there. Nowhere else.`,
+        },
+        {
+          name: '🆘 If you already clicked "Authorize"',
+          value:
+            '1. Go to **User Settings → Authorized Apps** and **remove** anything you don’t recognize.\n' +
+            '2. Move your funds to a **fresh wallet** to be safe.\n' +
+            '3. Report it and let the team know.',
+        },
+        { name: '🔗 Trust only', value: `${ctx.m('🔗・official-links')}` },
+      ),
+
   faq: (ctx) =>
     baseEmbed(ctx, COLORS.blurple)
       .setTitle('❓ Frequently Asked Questions')
@@ -586,7 +614,7 @@ const STRUCTURE = [
       // verify: gate entry. Visible to everyone (incl. unverified); Carl-bot
       // grants Farmer when a member clicks the ✅ reaction (bound in Carl-bot).
       { name: '✅・verify', phase: 1, gateEntry: true, allowSend: ['Wick'], position: 0, posts: ['verifyInfo'], reactWith: ['✅'] },
-      { name: '📣・announcements', phase: 1, readOnly: true, posts: ['launchAnnouncement'] },
+      { name: '📣・announcements', phase: 1, readOnly: true, posts: ['launchAnnouncement', 'scamWarning'] },
       // rules: stays visible to unverified members so they can read before verifying.
       { name: '📋・rules', phase: 1, readOnly: true, gateVisible: true, posts: ['rules'] },
       { name: '👋・welcome', phase: 1, readOnly: true, posts: ['welcome'] },
@@ -626,7 +654,7 @@ const STRUCTURE = [
       { name: '📊・token-chat', phase: 1, posts: ['tokenWarning', 'safety'] },
       { name: '🔥・buys', phase: 2, readOnly: true },
       { name: '🐳・whale-alerts', phase: 2, readOnly: true },
-      { name: '⚠️・scam-alerts', phase: 1, posts: ['scamAlerts'] },
+      { name: '⚠️・scam-alerts', phase: 1, posts: ['scamAlerts', 'scamWarning'] },
     ],
   },
   {
