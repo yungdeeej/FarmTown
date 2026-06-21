@@ -92,6 +92,7 @@ const OFFICIAL_LINK_ALLOWLIST = [
 const LINKS = {
   game: 'https://play.farmtown.online',
   website: 'https://farmtown.online',
+  status: 'https://play.farmtown.online/status',
   twitter: 'https://x.com/playfarmtown',
   contract: 'yMJPZbnhoHib3ib8n8PfiVcp9yauk1vnaGKLx7epump',
   dex: 'https://dexscreener.com/solana/frxrs52rlf45nywimjeoquh4g7crry7ny13fxn6t4dd',
@@ -220,7 +221,7 @@ const EMBEDS = {
       .addFields(
         { name: '🎮 Game', value: LINKS.game, inline: true },
         { name: '🌐 Website', value: LINKS.website, inline: true },
-        { name: '​', value: '​', inline: true },
+        { name: '📊 Status / Uptime', value: LINKS.status, inline: true },
         { name: '🐦 Twitter / X', value: LINKS.twitter, inline: true },
         { name: '📈 Chart (Dexscreener)', value: LINKS.dex, inline: true },
         { name: '​', value: '​', inline: true },
