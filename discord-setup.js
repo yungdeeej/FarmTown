@@ -87,6 +87,20 @@ const OFFICIAL_LINK_ALLOWLIST = [
   'dexscreener.com',
 ];
 
+// Language channels. Each language gets a hidden channel that only opens for
+// members who pick that language (react with the flag in #pick-language, bound
+// in Carl-bot). Trim/extend this list to taste.
+const LANGUAGES = [
+  { english: 'Spanish', native: 'Español', emoji: '🇪🇸', channel: '🇪🇸・spanish', role: 'Lang: Spanish' },
+  { english: 'Portuguese', native: 'Português', emoji: '🇧🇷', channel: '🇧🇷・portuguese', role: 'Lang: Portuguese' },
+  { english: 'Turkish', native: 'Türkçe', emoji: '🇹🇷', channel: '🇹🇷・turkish', role: 'Lang: Turkish' },
+  { english: 'Vietnamese', native: 'Tiếng Việt', emoji: '🇻🇳', channel: '🇻🇳・vietnamese', role: 'Lang: Vietnamese' },
+  { english: 'Indonesian', native: 'Bahasa Indonesia', emoji: '🇮🇩', channel: '🇮🇩・indonesian', role: 'Lang: Indonesian' },
+  { english: 'Russian', native: 'Русский', emoji: '🇷🇺', channel: '🇷🇺・russian', role: 'Lang: Russian' },
+  { english: 'Chinese', native: '中文', emoji: '🇨🇳', channel: '🇨🇳・chinese', role: 'Lang: Chinese' },
+  { english: 'French', native: 'Français', emoji: '🇫🇷', channel: '🇫🇷・french', role: 'Lang: French' },
+];
+
 // Official FarmTown links used throughout the embeds. Update here, re-run, and
 // the pinned messages update in place. Leave a value as 'TBD' until known.
 const LINKS = {
@@ -544,6 +558,16 @@ const EMBEDS = {
     return e;
   },
 
+  langSelect: (ctx) =>
+    baseEmbed(ctx, COLORS.blue)
+      .setTitle('🌐 Choose Your Language')
+      .setThumbnail(ctx.logo || null)
+      .setDescription(
+        '**React with your flag** below to unlock that language channel. ' +
+          'You can pick more than one — react again to leave a channel.\n\n' +
+          (ctx.languages || []).map((l) => `${l.emoji}  **${l.native}** · ${l.english}`).join('\n'),
+      ),
+
   verifyInfo: (ctx) =>
     baseEmbed(ctx, COLORS.green)
       .setTitle('✅ Verify to Enter FarmTown')
@@ -679,6 +703,15 @@ const STRUCTURE = [
       { name: 'bot-setup', phase: 2 },
     ],
   },
+  {
+    name: '🌐 LANGUAGES',
+    channels: [
+      // pick-language: visible to verified members; react to unlock a language.
+      { name: '🌐・pick-language', phase: 1, readOnly: true, posts: ['langSelect'], reactWith: LANGUAGES.map((l) => l.emoji) },
+      // One hidden channel per language — only opens for members with its role.
+      ...LANGUAGES.map((l) => ({ name: l.channel, phase: 1, langRole: l.role })),
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -774,6 +807,9 @@ const ROLES = [
   { name: 'Event Ping', phase: 1, color: 0x9b59b6, hoist: false, mentionable: true, permissions: [], selfAssign: '🎉', desc: 'Get pinged for events & community nights' },
   { name: 'Playtester', phase: 1, color: 0x1abc9c, hoist: false, mentionable: true, permissions: [], selfAssign: '🧪', desc: 'Opt into test builds & playtests' },
   { name: 'Mobile Tester', phase: 1, color: 0xe67e22, hoist: false, mentionable: true, permissions: [], selfAssign: '📱', desc: 'Help test the mobile experience' },
+  // Language roles — assigned via #pick-language reactions (Carl-bot). Each
+  // unlocks its hidden language channel. No permissions; not hoisted.
+  ...LANGUAGES.map((l) => ({ name: l.role, phase: 1, color: 0x4f5d7e, hoist: false, mentionable: false, permissions: [] })),
 ];
 
 // Derived list of self-assignable roles for the #get-roles message.
@@ -1071,6 +1107,52 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
           `team-only allow ${role.name} @ ${meta.name}`,
         );
       }
+    } else if (meta.langRole) {
+      // Language channel: hidden from everyone; only its language role (+ staff)
+      // can see it. NOT granted to verified/Farmer, so views stay clean.
+      await withRetry(
+        () =>
+          channel.permissionOverwrites.edit(
+            everyone,
+            { ViewChannel: false, AttachFiles: false, EmbedLinks: false, ...noThreads },
+            { reason: REASON },
+          ),
+        `lang hide ${meta.name}`,
+      );
+      // Remove any inherited view (Farmer/boosters/bots) propagated from the
+      // category sync — language channels must NOT be visible to verified members.
+      for (const role of gateViewRoles) {
+        if (staffRoles.some((s) => s.id === role.id)) continue; // staff keep view
+        await withRetry(
+          () => channel.permissionOverwrites.edit(role, { ViewChannel: false }, { reason: REASON }),
+          `lang deny ${role.name} @ ${meta.name}`,
+        );
+      }
+      const lr = guild.roles.cache.find((r) => r.name === meta.langRole);
+      if (lr) {
+        await withRetry(
+          () =>
+            channel.permissionOverwrites.edit(
+              lr,
+              { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, AddReactions: true },
+              { reason: REASON },
+            ),
+          `lang allow ${meta.langRole} @ ${meta.name}`,
+        );
+      }
+      for (const role of staffRoles) {
+        await withRetry(
+          () =>
+            channel.permissionOverwrites.edit(
+              role,
+              { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, AttachFiles: true },
+              { reason: REASON },
+            ),
+          `lang staff allow ${role.name} @ ${meta.name}`,
+        );
+      }
+      log('PERMS', `language channel locked: ${meta.name}`);
+      counts.perms += 1;
     } else {
       // Compute the @everyone overwrite from gate + read-only + gate-exception flags.
       const everyoneCanView = !gateOn || !!meta.gateEntry || !!meta.gateVisible;
@@ -1346,6 +1428,7 @@ async function postContent(guild, builtChannels, roleMap) {
     banner: assetEmbedRef(banner),
     guildName: guild.name,
     selfRoles: SELF_ROLES,
+    languages: LANGUAGES,
     reactionMode,
   };
 
