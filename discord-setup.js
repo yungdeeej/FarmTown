@@ -753,10 +753,12 @@ const ROLES = [
     phase: 1,
     color: 0x3498db,
     hoist: true,
+    // Moderation only — ban / kick / timeout / delete messages / manage threads.
+    // No server-structure powers (ManageChannels/Roles/Guild/Webhooks) — those
+    // stay with Admin & Founder for server protection.
     permissions: [
       Flags.ModerateMembers, Flags.ManageMessages, Flags.ManageThreads,
       Flags.KickMembers, Flags.BanMembers, Flags.ViewAuditLog,
-      Flags.ManageChannels, // lets Ticket Tool's "close" work for mods
       ...STAFF_POST_PERMS,
     ],
   },
