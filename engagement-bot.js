@@ -59,10 +59,15 @@ const AUTO_REPLY_CHANNELS = (process.env.AUTO_REPLY_CHANNELS || '💬・general,
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 const AUTO_REPLY_WINDOW = Number(process.env.AUTO_REPLY_WINDOW || 15);
-const AUTO_REPLY_TITLE = "🚜 What's Coming to FarmTown";
-// Triggers: play-to-earn, token, roadmap, features, "what's coming/next", etc.
-const AUTO_REPLY_TRIGGER =
+
+// "What's coming" rule — play-to-earn, token, roadmap, features, etc.
+const WHATS_COMING_TITLE = "🚜 What's Coming to FarmTown";
+const WHATS_COMING_TRIGGER =
   /\bp2e\b|play[\s-]?2[\s-]?earn|play[\s-]?to[\s-]?earn|road\s?map|tokenomics|what'?s\s+(coming|next)|when\s+(is\s+)?(the\s+)?(token|p2e|launch|utility|features?|airdrop|rewards?)|token\s+(utility|launch|use|do)|utility|airdrop|when\s+(moon|features?)|earn(ing)?\s+(real|money|crypto|sol|rewards|tokens?)/i;
+
+// "Farmer's Pool" rule — anyone mentioning "pool".
+const POOL_TITLE = "🏆 Farmer's Pool";
+const POOL_TRIGGER = /\bpool\b|farmer'?s?\s*pool/i;
 
 const log = (tag, msg) => console.log(`[${tag}] ${msg}`);
 
@@ -192,46 +197,72 @@ client.on(Events.GuildMemberAdd, async (member) => {
   }
 });
 
-// --- Auto-responder: P2E / token / features / roadmap questions ------------
+// --- Auto-responder: keyword-triggered canned replies ----------------------
 
-function buildAutoReplyEmbed(guild) {
-  const ch = (name) => {
-    const c = guild.channels.cache.find((x) => x.name === name.toLowerCase());
-    return c ? `<#${c.id}>` : `#${name}`;
-  };
+const chanMention = (guild, name) => {
+  const c = guild.channels.cache.find((x) => x.name === name.toLowerCase());
+  return c ? `<#${c.id}>` : `#${name}`;
+};
+
+function buildWhatsComingEmbed(guild) {
   return new EmbedBuilder()
     .setColor(0x57f287)
-    .setTitle(AUTO_REPLY_TITLE)
+    .setTitle(WHATS_COMING_TITLE)
     .setDescription(
       'Great question! 🌱 Right now the team is **heads-down making sure the foundation is top-tier** — ' +
         'so that when we build out features, everything runs smoothly.\n\n' +
         '**Play-to-earn, token utility, and new features** are all part of the vision — but we’re building ' +
         'on solid ground first. A stable, great game comes before everything else.\n\n' +
-        `📌 Trust only ${ch('🔗・official-links')} and ${ch('📣・announcements')} for real updates.\n` +
-        `❓ Check ${ch('❓・faq')} for common questions.\n\n` +
+        `📌 Trust only ${chanMention(guild, '🔗・official-links')} and ${chanMention(guild, '📣・announcements')} for real updates.\n` +
+        `❓ Check ${chanMention(guild, '❓・faq')} for common questions.\n\n` +
         'Good farms take time to grow — thanks for being early. 🚜',
     )
     .setFooter({ text: 'FarmTown 🌾' });
 }
 
+function buildPoolEmbed(guild) {
+  return new EmbedBuilder()
+    .setColor(0xf1c40f)
+    .setTitle(POOL_TITLE)
+    .setDescription(
+      '**Status: TBD** ⏳\n\n' +
+        'Farmer’s Pool is a pool where you can **sacrifice your in-game standing** for a share of a ' +
+        '**rewards pool**.\n\n' +
+        '🌀 The pool changes based on **different metrics each time**\n' +
+        '🎁 **Reward distribution** will also change from round to round\n' +
+        '🧠 There are many **strategies and ways to play** — so put your thinking cap on when the pools come out!\n\n' +
+        `More details are on the way — keep an eye on ${chanMention(guild, '📣・announcements')}.`,
+    )
+    .setFooter({ text: 'FarmTown 🌾' });
+}
+
+// Each rule: a keyword trigger that posts a canned embed, skipped if its reply
+// is already within the last `window` messages (so it never spams).
+const AUTO_REPLIES = [
+  { title: WHATS_COMING_TITLE, trigger: WHATS_COMING_TRIGGER, window: AUTO_REPLY_WINDOW, build: buildWhatsComingEmbed },
+  { title: POOL_TITLE, trigger: POOL_TRIGGER, window: AUTO_REPLY_WINDOW, build: buildPoolEmbed },
+];
+
 client.on(Events.MessageCreate, async (msg) => {
   if (!AUTORESPONDER) return;
   if (msg.author.bot || !msg.guild || !msg.content) return;
   if (!AUTO_REPLY_CHANNELS.includes((msg.channel.name || '').toLowerCase())) return;
-  if (!AUTO_REPLY_TRIGGER.test(msg.content)) return;
+
+  const rule = AUTO_REPLIES.find((r) => r.trigger.test(msg.content));
+  if (!rule) return;
 
   try {
-    // Don't repeat if our reply is already within the last N messages.
-    const recent = await msg.channel.messages.fetch({ limit: AUTO_REPLY_WINDOW });
+    // Don't repeat if this rule's reply is already within the last N messages.
+    const recent = await msg.channel.messages.fetch({ limit: rule.window });
     const alreadySaid = recent.some(
-      (m) => m.author.id === client.user.id && m.embeds[0]?.title === AUTO_REPLY_TITLE,
+      (m) => m.author.id === client.user.id && m.embeds[0]?.title === rule.title,
     );
     if (alreadySaid) {
-      log('AUTOREPLY', `skipped in #${msg.channel.name} — already within last ${AUTO_REPLY_WINDOW} messages`);
+      log('AUTOREPLY', `skipped "${rule.title}" in #${msg.channel.name} — within last ${rule.window} messages`);
       return;
     }
-    await msg.channel.send({ embeds: [buildAutoReplyEmbed(msg.guild)] });
-    log('AUTOREPLY', `replied in #${msg.channel.name} (triggered by ${msg.author.tag})`);
+    await msg.channel.send({ embeds: [rule.build(msg.guild)] });
+    log('AUTOREPLY', `posted "${rule.title}" in #${msg.channel.name} (triggered by ${msg.author.tag})`);
   } catch (err) {
     log('ERROR', `auto-responder: ${err.message}`);
   }
