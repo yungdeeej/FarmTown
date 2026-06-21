@@ -100,6 +100,11 @@ const LANGUAGES = [
   { english: 'Chinese', native: '中文', emoji: '🇨🇳', channel: '🇨🇳・chinese', role: 'Lang: Chinese' },
   { english: 'French', native: 'Français', emoji: '🇫🇷', channel: '🇫🇷・french', role: 'Lang: French' },
   { english: 'Nigerian', native: 'Naija', emoji: '🇳🇬', channel: '🇳🇬・nigeria', role: 'Lang: Nigerian' },
+  { english: 'Filipino', native: 'Filipino', emoji: '🇵🇭', channel: '🇵🇭・filipino', role: 'Lang: Filipino' },
+  { english: 'Hindi', native: 'हिन्दी', emoji: '🇮🇳', channel: '🇮🇳・hindi', role: 'Lang: Hindi' },
+  { english: 'Japanese', native: '日本語', emoji: '🇯🇵', channel: '🇯🇵・japanese', role: 'Lang: Japanese' },
+  { english: 'Greek', native: 'Ελληνικά', emoji: '🇬🇷', channel: '🇬🇷・greek', role: 'Lang: Greek' },
+  { english: 'Urdu', native: 'اردو', emoji: '🇵🇰', channel: '🇵🇰・urdu', role: 'Lang: Urdu' },
 ];
 
 // Official FarmTown links used throughout the embeds. Update here, re-run, and
@@ -1169,7 +1174,9 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
         ...noThreads,
       };
       if (meta.readOnly || meta.gateEntry) {
-        Object.assign(ev, { SendMessages: false, AddReactions: true });
+        // Deny AddReactions so members can't spam new emoji — they can still
+        // CLICK existing (bot-added) reactions, which is all reaction-roles need.
+        Object.assign(ev, { SendMessages: false, AddReactions: false });
       }
       await withRetry(
         () => channel.permissionOverwrites.edit(everyone, ev, { reason: REASON }),
