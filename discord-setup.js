@@ -99,6 +99,7 @@ const LANGUAGES = [
   { english: 'Russian', native: 'Русский', emoji: '🇷🇺', channel: '🇷🇺・russian', role: 'Lang: Russian' },
   { english: 'Chinese', native: '中文', emoji: '🇨🇳', channel: '🇨🇳・chinese', role: 'Lang: Chinese' },
   { english: 'French', native: 'Français', emoji: '🇫🇷', channel: '🇫🇷・french', role: 'Lang: French' },
+  { english: 'Nigerian', native: 'Naija', emoji: '🇳🇬', channel: '🇳🇬・nigeria', role: 'Lang: Nigerian' },
 ];
 
 // Official FarmTown links used throughout the embeds. Update here, re-run, and
