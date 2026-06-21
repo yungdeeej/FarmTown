@@ -686,10 +686,11 @@ const STRUCTURE = [
 // Optional Future roles only created under PHASE_2.
 // ---------------------------------------------------------------------------
 
-// Baseline for @everyone and general members: plain-text chat + voice only.
+// Baseline for @everyone and general members: plain-text chat + voice (incl.
+// screen share / Go Live via Stream).
 const MEMBER_BASE_PERMS = [
   Flags.ViewChannel, Flags.SendMessages, Flags.ReadMessageHistory,
-  Flags.Connect, Flags.Speak, Flags.UseVAD,
+  Flags.Connect, Flags.Speak, Flags.UseVAD, Flags.Stream,
 ];
 
 // Rich-posting perms restored to staff so they can still share links/media.
