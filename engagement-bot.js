@@ -66,11 +66,24 @@ const AUTO_REPLY_TRIGGER =
 
 const log = (tag, msg) => console.log(`[${tag}] ${msg}`);
 
+// Impersonation guard config.
+const IMPERSONATION_GUARD = process.env.IMPERSONATION_GUARD === '1';
+const STAFF_ROLE_NAMES = ['Founder', 'Admin', 'Moderator', 'Developer', 'Community Manager'];
+const MODLOG_CHANNEL = (process.env.MODLOG_CHANNEL || 'mod-log').toLowerCase();
+// High-confidence impersonation terms (auto-timeout + alert).
+const IMPERSONATION_HIGH = (process.env.IMPERSONATION_HIGH ||
+  'official,farmtown,farm town,support team,team ★,mod team,admin team,dev team,diddy,sully,farmerdiddy,idontcheat')
+  .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+// Lower-confidence terms (alert only).
+const IMPERSONATION_MED = (process.env.IMPERSONATION_MED ||
+  'support,admin,moderator,developer,staff,team,announcement')
+  .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+
 if (!TOKEN) throw new Error('DISCORD_BOT_TOKEN is not set');
 if (!GUILD_ID) throw new Error('GUILD_ID is not set');
 
 const intents = [GatewayIntentBits.Guilds];
-if (AUTOROLE) intents.push(GatewayIntentBits.GuildMembers); // privileged
+if (AUTOROLE || IMPERSONATION_GUARD) intents.push(GatewayIntentBits.GuildMembers); // privileged
 if (AUTORESPONDER) intents.push(GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent); // MessageContent privileged
 
 const client = new Client({ intents });
@@ -79,6 +92,7 @@ client.once(Events.ClientReady, async (c) => {
   log('READY', `logged in as ${c.user.tag}`);
   log('INFO', `auto-role on join: ${AUTOROLE ? `enabled (${FARMER_ROLE})` : 'disabled'}`);
   log('INFO', `auto-responder: ${AUTORESPONDER ? `enabled in [${AUTO_REPLY_CHANNELS.join(', ')}] (window ${AUTO_REPLY_WINDOW})` : 'disabled'}`);
+  log('INFO', `impersonation guard: ${IMPERSONATION_GUARD ? 'enabled' : 'disabled'}`);
 
   if (SELFTEST) {
     try {
@@ -222,6 +236,73 @@ client.on(Events.MessageCreate, async (msg) => {
     log('ERROR', `auto-responder: ${err.message}`);
   }
 });
+
+// --- Impersonation guard: catch members posing as staff -------------------
+
+function checkImpersonation(member) {
+  // Never flag real staff.
+  const hasStaffRole = member.roles.cache.some((r) => STAFF_ROLE_NAMES.includes(r.name));
+  if (hasStaffRole) return null;
+
+  const blob = [member.user.username, member.user.globalName || '', member.nickname || '', member.displayName]
+    .join(' | ')
+    .toLowerCase();
+
+  const high = IMPERSONATION_HIGH.find((k) => blob.includes(k));
+  if (high) return { confidence: 'high', term: high, blob };
+  const med = IMPERSONATION_MED.find((k) => blob.includes(k));
+  if (med) return { confidence: 'med', term: med, blob };
+  return null;
+}
+
+async function handlePossibleImpersonator(member, hit) {
+  const guild = member.guild;
+  const modlog = guild.channels.cache.find((c) => c.isTextBased?.() && c.name === MODLOG_CHANNEL);
+
+  // High confidence: timeout 7 days so they can't post while staff review.
+  let actioned = 'flagged (alert only)';
+  if (hit.confidence === 'high') {
+    try {
+      await member.timeout(7 * 24 * 60 * 60 * 1000, `Impersonation guard: matched "${hit.term}"`);
+      actioned = 'timed out 7d (review + ban)';
+    } catch (err) {
+      actioned = `could not timeout (${err.message}) — staff please ban`;
+    }
+  }
+
+  log('IMPERSONATION', `${member.user.tag} display:"${member.displayName}" matched "${hit.term}" [${hit.confidence}] -> ${actioned}`);
+
+  if (modlog) {
+    const embed = new EmbedBuilder()
+      .setColor(hit.confidence === 'high' ? 0xed4245 : 0xf1c40f)
+      .setTitle('🕵️ Possible staff impersonator')
+      .setThumbnail(member.user.displayAvatarURL())
+      .addFields(
+        { name: 'User', value: `${member} (\`@${member.user.username}\`)`, inline: false },
+        { name: 'Display name', value: `\`${member.displayName}\``, inline: true },
+        { name: 'Matched', value: `\`${hit.term}\` (${hit.confidence})`, inline: true },
+        { name: 'Account age', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
+        { name: 'Action', value: actioned, inline: false },
+      )
+      .setFooter({ text: 'FarmTown 🛡️ • verify and ban if it is an impersonator' });
+    try { await modlog.send({ embeds: [embed] }); } catch (e) { /* ignore */ }
+  }
+}
+
+if (IMPERSONATION_GUARD) {
+  client.on(Events.GuildMemberAdd, async (member) => {
+    if (member.user.bot) return;
+    const hit = checkImpersonation(member);
+    if (hit) await handlePossibleImpersonator(member, hit).catch((e) => log('ERROR', `guard: ${e.message}`));
+  });
+  // Catch members who change their name AFTER joining.
+  client.on(Events.GuildMemberUpdate, async (oldM, newM) => {
+    if (newM.user.bot) return;
+    if (oldM.displayName === newM.displayName && oldM.nickname === newM.nickname) return;
+    const hit = checkImpersonation(newM);
+    if (hit) await handlePossibleImpersonator(newM, hit).catch((e) => log('ERROR', `guard: ${e.message}`));
+  });
+}
 
 client.login(TOKEN).catch((err) => {
   if (/disallowed intents/i.test(err.message)) {
