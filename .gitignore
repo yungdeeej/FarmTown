@@ -3,3 +3,4 @@ node_modules/
 *.log
 solana-wallets.csv
 *.csv
+solana-wallets.txt
