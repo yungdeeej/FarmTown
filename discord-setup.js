@@ -388,6 +388,33 @@ const EMBEDS = {
           '```\nDevice:\nBrowser:\nScreenshot:\nWhat felt hard to use:\nWhat should be bigger/smaller:\n```',
       }),
 
+  betaInfo: (ctx) =>
+    baseEmbed(ctx, COLORS.teal)
+      .setTitle('🧪 Beta Testers')
+      .setThumbnail(ctx.logo || null)
+      .setDescription(
+        'Welcome to the **private beta-testers channel**! 🌱 This is where playtesters ' +
+          'get early builds, try new features first, and help break things before everyone else.',
+      )
+      .addFields(
+        {
+          name: '✅ How to help',
+          value: [
+            '• Test what the team asks and report bugs clearly',
+            `• File detailed reports in ${ctx.m('🐛・bug-reports')}`,
+            '• Keep test builds and links **confidential**',
+          ].join('\n'),
+        },
+        {
+          name: '🛡️ Reminder',
+          value: 'Never share your seed phrase or connect your wallet to anything outside the official game.',
+        },
+        {
+          name: '➕ Don’t have access?',
+          value: `Grab the **Playtester** role with 🧪 in ${ctx.m('🎭・get-roles')} to join.`,
+        },
+      ),
+
   stars: (ctx) =>
     baseEmbed(ctx, COLORS.gold)
       .setTitle('⭐ Stars — Premium Currency')
@@ -670,6 +697,8 @@ const STRUCTURE = [
   {
     name: '🧪 GAME TESTING',
     channels: [
+      // beta-testers: visible ONLY to the Playtester role (+ staff) — not Farmers.
+      { name: '🧪・beta-testers', phase: 1, roleOnly: 'Playtester', posts: ['betaInfo'] },
       { name: '🧪・test-build', phase: 2, posts: ['testBuild'] },
       { name: '🐛・bug-reports', phase: 1, posts: ['bugReport'] },
       { name: '🟢・known-issues', phase: 1, readOnly: true, posts: ['knownIssues'] },
@@ -813,7 +842,7 @@ const ROLES = [
   { name: 'Announcement Ping', phase: 1, color: 0xe74c3c, hoist: false, mentionable: true, permissions: [], selfAssign: '🔔', desc: 'Get pinged for major announcements' },
   { name: 'Update Ping', phase: 1, color: 0x3498db, hoist: false, mentionable: true, permissions: [], selfAssign: '🆕', desc: 'Get pinged for game updates & patch notes' },
   { name: 'Event Ping', phase: 1, color: 0x9b59b6, hoist: false, mentionable: true, permissions: [], selfAssign: '🎉', desc: 'Get pinged for events & community nights' },
-  { name: 'Playtester', phase: 1, color: 0x1abc9c, hoist: false, mentionable: true, permissions: [], selfAssign: '🧪', desc: 'Opt into test builds & playtests' },
+  { name: 'Playtester', phase: 1, color: 0x1abc9c, hoist: false, mentionable: true, permissions: [], selfAssign: '🧪', desc: 'Unlock the private beta-testers channel & test builds' },
   { name: 'Mobile Tester', phase: 1, color: 0xe67e22, hoist: false, mentionable: true, permissions: [], selfAssign: '📱', desc: 'Help test the mobile experience' },
   // Language roles — assigned via #pick-language reactions (Carl-bot). Each
   // unlocks its hidden language channel. No permissions; not hoisted.
@@ -1115,9 +1144,11 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
           `team-only allow ${role.name} @ ${meta.name}`,
         );
       }
-    } else if (meta.langRole) {
-      // Language channel: hidden from everyone; only its language role (+ staff)
-      // can see it. NOT granted to verified/Farmer, so views stay clean.
+    } else if (meta.langRole || meta.roleOnly) {
+      // Role-gated channel (language channels, beta-testers): hidden from
+      // everyone; only its specific role (+ staff) can see it. NOT granted to
+      // verified/Farmer, so views stay clean.
+      const onlyRoleName = meta.langRole || meta.roleOnly;
       await withRetry(
         () =>
           channel.permissionOverwrites.edit(
@@ -1125,18 +1156,18 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
             { ViewChannel: false, AttachFiles: false, EmbedLinks: false, ...noThreads },
             { reason: REASON },
           ),
-        `lang hide ${meta.name}`,
+        `role-gate hide ${meta.name}`,
       );
       // Remove any inherited view (Farmer/boosters/bots) propagated from the
-      // category sync — language channels must NOT be visible to verified members.
+      // category sync — must NOT be visible to verified members.
       for (const role of gateViewRoles) {
         if (staffRoles.some((s) => s.id === role.id)) continue; // staff keep view
         await withRetry(
           () => channel.permissionOverwrites.edit(role, { ViewChannel: false }, { reason: REASON }),
-          `lang deny ${role.name} @ ${meta.name}`,
+          `role-gate deny ${role.name} @ ${meta.name}`,
         );
       }
-      const lr = guild.roles.cache.find((r) => r.name === meta.langRole);
+      const lr = guild.roles.cache.find((r) => r.name === onlyRoleName);
       if (lr) {
         await withRetry(
           () =>
@@ -1145,8 +1176,10 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
               { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, AddReactions: true },
               { reason: REASON },
             ),
-          `lang allow ${meta.langRole} @ ${meta.name}`,
+          `role-gate allow ${onlyRoleName} @ ${meta.name}`,
         );
+      } else {
+        log('WARN', `role-gate role "${onlyRoleName}" not found for ${meta.name}`);
       }
       for (const role of staffRoles) {
         await withRetry(
@@ -1156,10 +1189,10 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
               { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, AttachFiles: true },
               { reason: REASON },
             ),
-          `lang staff allow ${role.name} @ ${meta.name}`,
+          `role-gate staff allow ${role.name} @ ${meta.name}`,
         );
       }
-      log('PERMS', `language channel locked: ${meta.name}`);
+      log('PERMS', `role-gated channel locked: ${meta.name} (${onlyRoleName} only)`);
       counts.perms += 1;
     } else {
       // Compute the @everyone overwrite from gate + read-only + gate-exception flags.
