@@ -698,7 +698,8 @@ const STRUCTURE = [
     name: '🧪 GAME TESTING',
     channels: [
       // beta-testers: visible ONLY to the Playtester role (+ staff) — not Farmers.
-      { name: '🧪・beta-testers', phase: 1, roleOnly: 'Playtester', posts: ['betaInfo'] },
+      // readOnly: testers can view/react but NOT chat (only staff post).
+      { name: '🧪・beta-testers', phase: 1, roleOnly: 'Playtester', readOnly: true, posts: ['betaInfo'] },
       { name: '🧪・test-build', phase: 2, posts: ['testBuild'] },
       { name: '🐛・bug-reports', phase: 1, posts: ['bugReport'] },
       { name: '🟢・known-issues', phase: 1, readOnly: true, posts: ['knownIssues'] },
@@ -1173,7 +1174,8 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
           () =>
             channel.permissionOverwrites.edit(
               lr,
-              { ViewChannel: true, SendMessages: true, ReadMessageHistory: true, AddReactions: true },
+              // readOnly role-gated channels: view + react, but no chat.
+              { ViewChannel: true, SendMessages: !meta.readOnly, ReadMessageHistory: true, AddReactions: true },
               { reason: REASON },
             ),
           `role-gate allow ${onlyRoleName} @ ${meta.name}`,

@@ -76,26 +76,20 @@ client.once('clientReady', async (c) => {
     if (batch.size < 100) break;
   }
 
-  const found = new Map(); // wallet -> { user, date }
+  const found = new Set(); // wallet addresses only
   for (const m of messages) {
     if (!m.content || m.author.bot) continue;
     for (const cand of m.content.match(CANDIDATE) || []) {
-      if (isSolanaAddress(cand) && !found.has(cand)) {
-        found.set(cand, { user: m.author.username, date: m.createdAt.toISOString().slice(0, 10) });
-      }
+      if (isSolanaAddress(cand)) found.add(cand);
     }
   }
 
   console.log(`Scanned ${messages.length} messages in #${CHANNEL}.`);
   console.log(`Found ${found.size} unique Solana wallet(s).\n`);
-  const rows = ['wallet,username,date'];
-  for (const [wallet, info] of found) {
-    console.log(`${wallet}  —  ${info.user} (${info.date})`);
-    rows.push(`${wallet},${info.user},${info.date}`);
-  }
+  for (const wallet of found) console.log(wallet);
   if (found.size) {
-    fs.writeFileSync('solana-wallets.csv', rows.join('\n') + '\n');
-    console.log('\nSaved -> solana-wallets.csv');
+    fs.writeFileSync('solana-wallets.txt', [...found].join('\n') + '\n');
+    console.log('\nSaved -> solana-wallets.txt');
   }
 
   await c.destroy();
