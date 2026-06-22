@@ -1207,9 +1207,9 @@ async function applyPermissions(guild, categoryMap, builtChannels, roleMap) {
         ...noThreads,
       };
       if (meta.readOnly || meta.gateEntry) {
-        // Deny AddReactions so members can't spam new emoji — they can still
-        // CLICK existing (bot-added) reactions, which is all reaction-roles need.
-        Object.assign(ev, { SendMessages: false, AddReactions: false });
+        // NOTE: keep AddReactions allowed — do NOT deny it for @everyone (it
+        // breaks reactions/reaction-roles). Per maintainer preference.
+        Object.assign(ev, { SendMessages: false, AddReactions: true });
       }
       await withRetry(
         () => channel.permissionOverwrites.edit(everyone, ev, { reason: REASON }),
