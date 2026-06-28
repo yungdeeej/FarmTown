@@ -818,12 +818,12 @@ const ROLES = [
     color: 0x2ecc71,
     hoist: false,
     isDefaultMember: true,
-    // Locked down: plain-text chat + voice. AttachFiles is granted at base so
-    // bug-reporters can upload screenshots in their own ticket, but it's denied
-    // on every public channel below — so uploads only work inside tickets.
+    // Exactly: view, read history, send messages, attach files, add reactions.
+    // Nothing else (voice etc. comes from @everyone). Channel overwrites still
+    // restrict attach/links to tickets only.
     permissions: [
-      Flags.ViewChannel, Flags.SendMessages, Flags.ReadMessageHistory,
-      Flags.Connect, Flags.Speak, Flags.UseVAD, Flags.AttachFiles,
+      Flags.ViewChannel, Flags.ReadMessageHistory, Flags.SendMessages,
+      Flags.AttachFiles, Flags.AddReactions,
     ],
   },
   { name: 'Early Farmer', phase: 1, color: 0x27ae60, hoist: false, permissions: [] },
