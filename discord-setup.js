@@ -687,6 +687,7 @@ const STRUCTURE = [
     name: '💬 COMMUNITY',
     channels: [
       { name: '💬・general', phase: 1, posts: ['safety'] },
+      { name: '💱・trading', phase: 1 },
       { name: '🌾・farm-chat', phase: 2 },
       { name: '🤝・friend-farms', phase: 1, posts: ['friendFarms'] },
       { name: '📸・screenshots-clips', phase: 1 },
