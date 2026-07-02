@@ -840,12 +840,13 @@ const ROLES = [
   { name: 'Weed Farmer', phase: 2, color: 0x16a085, hoist: false, permissions: [] },
   { name: 'Star Collector', phase: 2, color: 0xfdcb6e, hoist: false, permissions: [] },
   // Self-assignable opt-in ping/interest roles (toggled via #get-roles buttons,
-  // handled by engagement-bot.js). Mentionable so staff can ping opted-in users.
-  { name: 'Announcement Ping', phase: 1, color: 0xe74c3c, hoist: false, mentionable: true, permissions: [], selfAssign: '🔔', desc: 'Get pinged for major announcements' },
-  { name: 'Update Ping', phase: 1, color: 0x3498db, hoist: false, mentionable: true, permissions: [], selfAssign: '🆕', desc: 'Get pinged for game updates & patch notes' },
-  { name: 'Event Ping', phase: 1, color: 0x9b59b6, hoist: false, mentionable: true, permissions: [], selfAssign: '🎉', desc: 'Get pinged for events & community nights' },
-  { name: 'Playtester', phase: 1, color: 0x1abc9c, hoist: false, mentionable: true, permissions: [], selfAssign: '🧪', desc: 'Unlock the private beta-testers channel & test builds' },
-  { name: 'Mobile Tester', phase: 1, color: 0xe67e22, hoist: false, mentionable: true, permissions: [], selfAssign: '📱', desc: 'Help test the mobile experience' },
+  // handled by engagement-bot.js). NOT mentionable — only members with the
+  // "Mention All Roles" permission (owner/admin) can ping them.
+  { name: 'Announcement Ping', phase: 1, color: 0xe74c3c, hoist: false, mentionable: false, permissions: [], selfAssign: '🔔', desc: 'Get pinged for major announcements' },
+  { name: 'Update Ping', phase: 1, color: 0x3498db, hoist: false, mentionable: false, permissions: [], selfAssign: '🆕', desc: 'Get pinged for game updates & patch notes' },
+  { name: 'Event Ping', phase: 1, color: 0x9b59b6, hoist: false, mentionable: false, permissions: [], selfAssign: '🎉', desc: 'Get pinged for events & community nights' },
+  { name: 'Playtester', phase: 1, color: 0x1abc9c, hoist: false, mentionable: false, permissions: [], selfAssign: '🧪', desc: 'Unlock the private beta-testers channel & test builds' },
+  { name: 'Mobile Tester', phase: 1, color: 0xe67e22, hoist: false, mentionable: false, permissions: [], selfAssign: '📱', desc: 'Help test the mobile experience' },
   // Language roles — assigned via #pick-language reactions (Carl-bot). Each
   // unlocks its hidden language channel. No permissions; not hoisted.
   ...LANGUAGES.map((l) => ({ name: l.role, phase: 1, color: 0x4f5d7e, hoist: false, mentionable: false, permissions: [] })),
